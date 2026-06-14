@@ -1,129 +1,320 @@
 <script setup lang="ts">
-import { Crown, Send } from 'lucide-vue'
-import type { Message } from '~/types/chat'
+import { 
+  Users, 
+  Settings, 
+  LogOut, 
+  Search, 
+  RefreshCw, 
+  PlusCircle,
+  MessageSquare
+} from 'lucide-vue-next'
+import type { Message, User, Room } from '~/types/chat'
+import AnnouncementBar from '~/components/chat/AnnouncementBar.vue'
+import MessageItem from '~/components/chat/MessageItem.vue'
+import UserList from '~/components/chat/UserList.vue'
+import ChatInput from '~/components/chat/ChatInput.vue'
 
-const { socket, isConnected } = useSocket()
-const roomId = ref('general')
-const messageInput = ref('')
-const messages = ref<Message[]>([])
-const isHost = ref(true) // Mocking host status for now
+// -- State --
+const isLobby = ref(true)
+const showUserList = ref(true)
+const searchQuery = ref('')
+const isSearching = ref(false)
 
-const joinRoom = () => {
-  if (socket.value && roomId.value) {
-    socket.value.emit('join-room', roomId.value)
-    messages.value = [] 
-    // Simple Bot Welcome
-    messages.value.push({
-      id: 'bot-welcome',
-      content: `Welcome to room: ${roomId.value}!`,
-      senderId: 'bot',
-      createdAt: new Date().toISOString()
-    })
-  }
-}
+// -- Mock Data --
+const currentUser = ref<User>({ id: 'user-1', name: '나 (본인)', isHost: true })
 
-const sendMessage = () => {
-  if (socket.value && messageInput.value.trim()) {
-    socket.value.emit('message', {
-      roomId: roomId.value,
-      content: messageInput.value
-    })
-    messageInput.value = ''
-  }
-}
+const rooms = ref<Room[]>([
+  { id: 'general', name: '자유 게시판', creatorId: 'user-1', isLocked: false, announcement: '실시간 채팅 서비스에 오신 것을 환영합니다! 공지사항을 확인해 주세요.' },
+  { id: 'tech', name: '기술 공유', creatorId: 'user-2', isLocked: true },
+  { id: 'qna', name: 'Q&A 질문방', creatorId: 'user-3', isLocked: false }
+])
 
-onMounted(() => {
-  // Listen for messages
-  const checkSocket = setInterval(() => {
-    if (socket.value) {
-      socket.value.on('message', (msg: Message) => {
-        messages.value.push(msg)
-      })
-      clearInterval(checkSocket)
+const activeRoom = ref<Room | null>(null)
+
+const onlineUsers = ref<User[]>([
+  { id: 'user-1', name: '나 (본인)', isHost: true },
+  { id: 'user-2', name: '김철수', isTyping: true },
+  { id: 'user-3', name: '이영희' },
+  { id: 'user-4', name: '박지민' }
+])
+
+const messages = ref<Message[]>([
+  { 
+    id: 'msg-1', 
+    senderId: 'bot', 
+    senderName: 'Assistant', 
+    content: '안녕하세요! 자유 게시판에 입장하셨습니다.', 
+    type: 'system', 
+    createdAt: new Date(Date.now() - 100000).toISOString() 
+  },
+  { 
+    id: 'msg-2', 
+    senderId: 'user-2', 
+    senderName: '김철수', 
+    content: '반갑습니다 여러분!', 
+    createdAt: new Date(Date.now() - 90000).toISOString() 
+  },
+  { 
+    id: 'msg-3', 
+    senderId: 'user-1', 
+    senderName: '나 (본인)', 
+    content: '네 안녕하세요! 이번 업데이트 내용 보셨나요?', 
+    createdAt: new Date(Date.now() - 80000).toISOString() 
+  },
+  { 
+    id: 'msg-4', 
+    senderId: 'user-3', 
+    senderName: '이영희', 
+    content: 'https://nuxt.com/docs/getting-started/introduction 여기 링크 참고해보세요!', 
+    createdAt: new Date(Date.now() - 70000).toISOString(),
+    linkPreview: {
+      url: 'https://nuxt.com/docs/getting-started/introduction',
+      title: 'Nuxt: The Intuitive Vue Framework',
+      description: 'Nuxt is an open source framework that makes web development intuitive and powerful.',
+      image: 'https://nuxt.com/social-card.png',
+      siteName: 'Nuxt'
     }
-  }, 100)
-})
+  },
+  { 
+    id: 'msg-5', 
+    senderId: 'user-1', 
+    senderName: '나 (본인)', 
+    content: '점심 메뉴 골라주세요!', 
+    type: 'poll',
+    createdAt: new Date(Date.now() - 60000).toISOString(),
+    poll: {
+      id: 'poll-1',
+      question: '오늘 점심 메뉴는?',
+      options: [
+        { id: 'opt-1', text: '김치찌개', votes: 12 },
+        { id: 'opt-2', text: '돈까스', votes: 15 },
+        { id: 'opt-3', text: '마라탕', votes: 8 }
+      ],
+      totalVotes: 35
+    }
+  },
+  { 
+    id: 'msg-6', 
+    senderId: 'user-2', 
+    senderName: '김철수', 
+    content: '오 돈까스 좋네요!', 
+    createdAt: new Date(Date.now() - 50000).toISOString() 
+  }
+])
+
+// -- Methods --
+const enterRoom = (room: Room) => {
+  activeRoom.value = room
+  isLobby.value = false
+}
+
+const leaveRoom = () => {
+  isLobby.value = true
+  activeRoom.value = null
+}
+
+const handleSendMessage = (content: string) => {
+  const newMessage: Message = {
+    id: `msg-${Date.now()}`,
+    senderId: currentUser.value.id,
+    senderName: currentUser.value.name,
+    content,
+    createdAt: new Date().toISOString()
+  }
+  messages.value.push(newMessage)
+  
+  // Fake bot response for search demonstration
+  if (content.includes('검색')) {
+    setTimeout(() => {
+      messages.value.push({
+        id: `msg-bot-${Date.now()}`,
+        senderId: 'bot',
+        senderName: 'Assistant',
+        content: '상단 돋보기 아이콘을 클릭하여 과거 메시지를 검색할 수 있습니다.',
+        type: 'system',
+        createdAt: new Date().toISOString()
+      })
+    }, 500)
+  }
+}
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-100 p-4 font-sans">
-    <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-md overflow-hidden flex flex-col h-[80vh]">
-      <!-- Header -->
-      <div class="p-4 border-b bg-blue-600 text-white flex justify-between items-center">
-        <div class="flex items-center gap-2">
-          <h1 class="text-xl font-bold">Nuxt Chat</h1>
-          <Crown v-if="isHost" class="w-5 h-5 text-yellow-400" />
+  <div class="min-h-screen bg-[#F8F9FB] text-gray-900 font-sans selection:bg-blue-100 selection:text-blue-700">
+    <!-- Lobby View -->
+    <div v-if="isLobby" class="max-w-5xl mx-auto py-12 px-6 animate-in fade-in zoom-in-95 duration-500">
+      <header class="flex justify-between items-end mb-12">
+        <div class="space-y-2">
+          <h1 class="text-4xl font-black tracking-tight text-gray-900 flex items-center gap-3">
+            <div class="bg-blue-600 p-2 rounded-2xl shadow-lg shadow-blue-200">
+              <MessageSquare class="w-8 h-8 text-white" />
+            </div>
+            Nuxt Chat
+          </h1>
+          <p class="text-gray-500 font-medium">실시간으로 소통하고 아이디어를 공유하세요.</p>
         </div>
-        <div class="flex items-center gap-2">
-          <span :class="isConnected ? 'bg-green-400' : 'bg-red-400'" class="w-3 h-3 rounded-full"></span>
-          <span class="text-sm">{{ isConnected ? 'Connected' : 'Disconnected' }}</span>
-        </div>
-      </div>
+        <button class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-bold shadow-xl shadow-blue-100 transition-all flex items-center gap-2 active:scale-95">
+          <PlusCircle class="w-5 h-5" />
+          방 만들기
+        </button>
+      </header>
 
-      <!-- Room Selection -->
-      <div class="p-4 bg-gray-50 border-b flex gap-2">
-        <input 
-          v-model="roomId" 
-          type="text" 
-          placeholder="Room ID" 
-          class="flex-1 px-3 py-2 border rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-        />
-        <button 
-          @click="joinRoom" 
-          class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition flex items-center gap-2"
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Room Cards -->
+        <div 
+          v-for="room in rooms" 
+          :key="room.id"
+          class="group bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-blue-50 hover:-translate-y-1 transition-all cursor-pointer flex flex-col justify-between h-48"
+          @click="enterRoom(room)"
         >
-          Join Room
+          <div>
+            <div class="flex justify-between items-start mb-4">
+              <div class="bg-gray-50 p-3 rounded-2xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                <Users class="w-6 h-6" />
+              </div>
+            </div>
+            <h3 class="text-lg font-bold text-gray-800">{{ room.name }}</h3>
+          </div>
+          <div class="flex items-center justify-between mt-4">
+            <div class="flex -space-x-2">
+              <div v-for="i in 3" :key="i" class="w-6 h-6 rounded-full border-2 border-white bg-gray-200"></div>
+              <div class="w-6 h-6 rounded-full border-2 border-white bg-gray-100 flex items-center justify-center text-[8px] font-bold text-gray-400">+12</div>
+            </div>
+            <span class="text-xs font-bold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">입장하기 →</span>
+          </div>
+        </div>
+
+        <!-- Refresh Card -->
+        <button class="bg-white/50 border-2 border-dashed border-gray-200 rounded-[2rem] flex flex-col items-center justify-center gap-3 p-6 text-gray-400 hover:text-blue-500 hover:border-blue-200 hover:bg-blue-50/30 transition-all">
+          <RefreshCw class="w-8 h-8" />
+          <span class="font-bold text-sm">목록 새로고침</span>
         </button>
       </div>
+    </div>
 
-      <!-- Message List -->
-      <div class="flex-1 overflow-y-auto p-4 space-y-4">
-        <div v-if="messages.length === 0" class="text-center text-gray-400 mt-10">
-          No messages yet. Start chatting!
-        </div>
-        <div 
-          v-for="msg in messages" 
-          :key="msg.id" 
-          class="flex flex-col"
-          :class="msg.senderId === socket?.id ? 'items-end' : 'items-start'"
-        >
-          <div class="flex items-center gap-1 mb-1">
-            <span class="text-xs text-gray-500">{{ msg.senderId === 'bot' ? 'Assistant' : (msg.senderId === socket?.id ? 'You' : 'User') }}</span>
-          </div>
-          <div 
-            class="max-w-[80%] p-3 rounded-lg shadow-sm"
-            :class="[
-              msg.senderId === socket?.id ? 'bg-blue-500 text-white rounded-tr-none' : 'bg-gray-200 text-gray-800 rounded-tl-none',
-              msg.senderId === 'bot' ? 'bg-indigo-100 text-indigo-900 border border-indigo-200' : ''
-            ]"
-          >
-            <p>{{ msg.content }}</p>
-            <span class="text-[10px] opacity-70 mt-1 block">
-              {{ new Date(msg.createdAt).toLocaleTimeString() }}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Message Input -->
-      <div class="p-4 border-t bg-gray-50">
-        <form @submit.prevent="sendMessage" class="flex gap-2">
-          <input 
-            v-model="messageInput" 
-            type="text" 
-            placeholder="Type a message..." 
-            class="flex-1 px-3 py-2 border rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-          />
-          <button 
-            type="submit" 
-            class="bg-blue-500 text-white px-6 py-2 rounded font-bold hover:bg-blue-600 transition flex items-center gap-2"
-            :disabled="!isConnected"
-          >
-            <Send class="w-4 h-4" />
-            Send
+    <!-- Chat Room View -->
+    <div v-else class="h-screen flex flex-col bg-white overflow-hidden animate-in slide-in-from-right duration-500">
+      <!-- Header -->
+      <header class="h-16 border-b flex items-center justify-between px-6 shrink-0 z-10 bg-white/80 backdrop-blur-md">
+        <div class="flex items-center gap-4">
+          <button @click="leaveRoom" class="p-2 hover:bg-gray-100 rounded-xl text-gray-500 transition-colors">
+            <LogOut class="w-5 h-5 -scale-x-100" />
           </button>
-        </form>
+          <div class="w-px h-6 bg-gray-200"></div>
+          <div>
+            <h2 class="text-lg font-black text-gray-900 flex items-center gap-2">
+              {{ activeRoom?.name }}
+            </h2>
+            <div class="flex items-center gap-1.5">
+              <div class="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+              <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{{ onlineUsers.length }} Users Online</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <div v-if="isSearching" class="relative animate-in slide-in-from-right-4 duration-300">
+            <input 
+              v-model="searchQuery" 
+              type="text" 
+              placeholder="메시지 검색..." 
+              class="bg-gray-100 border-none rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 w-64"
+              @keyup.esc="isSearching = false"
+            />
+            <button @click="isSearching = false" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              <PlusCircle class="w-4 h-4 rotate-45" />
+            </button>
+          </div>
+          <button 
+            v-else
+            @click="isSearching = true" 
+            class="p-2.5 hover:bg-gray-100 rounded-xl text-gray-500 transition-colors"
+          >
+            <Search class="w-5 h-5" />
+          </button>
+          
+          <button class="p-2.5 hover:bg-gray-100 rounded-xl text-gray-500 transition-colors">
+            <Settings class="w-5 h-5" />
+          </button>
+          
+          <button 
+            @click="showUserList = !showUserList"
+            class="p-2.5 hover:bg-gray-100 rounded-xl text-gray-500 transition-colors md:hidden"
+          >
+            <Users class="w-5 h-5" />
+          </button>
+        </div>
+      </header>
+
+      <div class="flex-1 flex overflow-hidden relative">
+        <!-- Main Chat Area -->
+        <div class="flex-1 flex flex-col overflow-hidden bg-[#FBFBFC]">
+          <!-- Announcement Bar -->
+          <AnnouncementBar 
+            :announcement="activeRoom?.announcement" 
+            :isHost="currentUser.isHost" 
+          />
+
+          <!-- Messages -->
+          <div class="flex-1 overflow-y-auto p-6 space-y-2">
+            <div class="text-center py-8">
+              <span class="text-[10px] font-bold text-gray-300 uppercase tracking-[0.2em] bg-gray-50 px-3 py-1 rounded-full">2026년 6월 14일 일요일</span>
+            </div>
+            
+            <MessageItem 
+              v-for="msg in messages" 
+              :key="msg.id" 
+              :message="msg" 
+              :isOwn="msg.senderId === currentUser.id" 
+            />
+          </div>
+
+          <!-- Typing Indicators -->
+          <div class="px-6 h-6 flex items-center gap-2">
+            <div v-if="onlineUsers.some(u => u.isTyping && u.id !== currentUser.id)" class="flex items-center gap-2">
+              <div class="flex gap-1">
+                <span class="w-1 h-1 bg-blue-400 rounded-full animate-bounce"></span>
+                <span class="w-1 h-1 bg-blue-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                <span class="w-1 h-1 bg-blue-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+              </div>
+              <span class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">누군가 입력 중...</span>
+            </div>
+          </div>
+
+          <!-- Input Area -->
+          <ChatInput @send="handleSendMessage" />
+        </div>
+
+        <!-- Right Sidebar (Users) -->
+        <UserList 
+          v-if="showUserList" 
+          :users="onlineUsers" 
+          :isHost="currentUser.isHost"
+          class="hidden md:flex"
+        />
       </div>
     </div>
   </div>
 </template>
+
+<style>
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+</style>
