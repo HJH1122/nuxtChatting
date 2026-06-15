@@ -1,0 +1,86 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String    @id @default(uuid())
+  name      String
+  rooms     Room[]    @relation("RoomCreator")
+  messages  Message[]
+  votes     Vote[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Room {
+  id           String    @id @default(uuid())
+  name         String
+  creator      User      @relation("RoomCreator", fields: [creatorId], references: [id])
+  creatorId    String
+  isLocked     Boolean   @default(false)
+  announcement String?
+  messages     Message[]
+  polls        Poll[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Message {
+  id           String    @id @default(uuid())
+  content      String
+  sender       User      @relation(fields: [senderId], references: [id])
+  senderId     String
+  room         Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  roomId       String
+  type         String    @default("text") // text, image, file, system, poll
+  isEdited     Boolean   @default(false)
+  
+  // For attachments
+  attachmentName String?
+  attachmentUrl  String?
+  attachmentType String?
+  attachmentSize Int?
+
+  // Relation to Poll if message is a poll
+  poll         Poll?     @relation(fields: [pollId], references: [id])
+  pollId       String?
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Poll {
+  id         String       @id @default(uuid())
+  question   String
+  options    PollOption[]
+  room       Room         @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  roomId     String
+  messages   Message[]
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+}
+
+model PollOption {
+  id     String @id @default(uuid())
+  text   String
+  poll   Poll   @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  pollId String
+  votes  Vote[]
+}
+
+model Vote {
+  id       String     @id @default(uuid())
+  user     User       @relation(fields: [userId], references: [id])
+  userId   String
+  option   PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  optionId String
+
+  @@unique([userId, optionId])
+}
