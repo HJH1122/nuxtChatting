@@ -15,13 +15,36 @@ import UserList from '~/components/chat/UserList.vue'
 import ChatInput from '~/components/chat/ChatInput.vue'
 
 // -- State --
+const isLoggedIn = ref(false)
+const inputNickname = ref('')
 const isLobby = ref(true)
 const showUserList = ref(true)
 const searchQuery = ref('')
 const isSearching = ref(false)
 
 // -- Mock Data --
-const currentUser = ref<User>({ id: 'user-1', name: '나 (본인)', isHost: true })
+const currentUser = ref<User>({ id: '', name: '' })
+
+// -- Methods --
+const handleLogin = () => {
+  if (!inputNickname.value.trim()) return
+  
+  currentUser.value = {
+    id: `user-${Math.random().toString(36).substr(2, 9)}`,
+    name: inputNickname.value.trim(),
+    isHost: true
+  }
+  
+  // Update online users to include the new user
+  onlineUsers.value = [
+    currentUser.value,
+    { id: 'user-2', name: '김철수', isTyping: true },
+    { id: 'user-3', name: '이영희' },
+    { id: 'user-4', name: '박지민' }
+  ]
+  
+  isLoggedIn.value = true
+}
 
 const rooms = ref<Room[]>([
   { id: 'general', name: '자유 게시판', creatorId: 'user-1', isLocked: false, announcement: '실시간 채팅 서비스에 오신 것을 환영합니다! 공지사항을 확인해 주세요.' },
@@ -31,12 +54,7 @@ const rooms = ref<Room[]>([
 
 const activeRoom = ref<Room | null>(null)
 
-const onlineUsers = ref<User[]>([
-  { id: 'user-1', name: '나 (본인)', isHost: true },
-  { id: 'user-2', name: '김철수', isTyping: true },
-  { id: 'user-3', name: '이영희' },
-  { id: 'user-4', name: '박지민' }
-])
+const onlineUsers = ref<User[]>([])
 
 const messages = ref<Message[]>([
   { 
@@ -141,8 +159,45 @@ const handleSendMessage = (content: string) => {
 
 <template>
   <div class="min-h-screen bg-[#F8F9FB] text-gray-900 font-sans selection:bg-blue-100 selection:text-blue-700">
+    <!-- Login View -->
+    <div v-if="!isLoggedIn" class="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-blue-50 to-white">
+      <div class="w-full max-w-md animate-in fade-in zoom-in-95 duration-700">
+        <div class="text-center mb-10 space-y-3">
+          <div class="inline-flex bg-blue-600 p-4 rounded-[2rem] shadow-2xl shadow-blue-200 mb-4">
+            <MessageSquare class="w-10 h-10 text-white" />
+          </div>
+          <h1 class="text-4xl font-black tracking-tight text-gray-900">Nuxt Chat</h1>
+          <p class="text-gray-500 font-medium">실시간 채팅 서비스에 참여하기 위해<br/>닉네임을 입력해주세요.</p>
+        </div>
+
+        <div class="bg-white p-10 rounded-[2.5rem] shadow-xl shadow-blue-100/50 border border-white space-y-6">
+          <div class="space-y-2">
+            <label class="text-sm font-bold text-gray-400 uppercase tracking-widest ml-1">Nickname</label>
+            <input 
+              v-model="inputNickname"
+              type="text" 
+              placeholder="멋진 이름을 정해주세요" 
+              class="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-lg font-bold placeholder:text-gray-300 focus:ring-2 focus:ring-blue-500 transition-all"
+              @keyup.enter="handleLogin"
+            />
+          </div>
+          <button 
+            @click="handleLogin"
+            class="w-full bg-blue-600 hover:bg-blue-700 text-white py-5 rounded-2xl font-black text-lg shadow-xl shadow-blue-200 transition-all flex items-center justify-center gap-2 active:scale-[0.98] group"
+          >
+            채팅 시작하기
+            <span class="group-hover:translate-x-1 transition-transform">→</span>
+          </button>
+        </div>
+        
+        <p class="text-center mt-8 text-xs font-bold text-gray-300 uppercase tracking-widest">
+          Build with Nuxt 4 & Socket.io
+        </p>
+      </div>
+    </div>
+
     <!-- Lobby View -->
-    <div v-if="isLobby" class="max-w-5xl mx-auto py-12 px-6 animate-in fade-in zoom-in-95 duration-500">
+    <div v-else-if="isLobby" class="max-w-5xl mx-auto py-12 px-6 animate-in fade-in zoom-in-95 duration-500">
       <header class="flex justify-between items-end mb-12">
         <div class="space-y-2">
           <h1 class="text-4xl font-black tracking-tight text-gray-900 flex items-center gap-3">
@@ -153,10 +208,16 @@ const handleSendMessage = (content: string) => {
           </h1>
           <p class="text-gray-500 font-medium">실시간으로 소통하고 아이디어를 공유하세요.</p>
         </div>
-        <button class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-bold shadow-xl shadow-blue-100 transition-all flex items-center gap-2 active:scale-95">
-          <PlusCircle class="w-5 h-5" />
-          방 만들기
-        </button>
+        <div class="flex items-center gap-4">
+          <button @click="handleLogout" class="flex items-center gap-2 text-gray-400 hover:text-red-500 font-bold transition-colors group">
+            <LogOut class="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+            로그아웃
+          </button>
+          <button class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-bold shadow-xl shadow-blue-100 transition-all flex items-center gap-2 active:scale-95">
+            <PlusCircle class="w-5 h-5" />
+            방 만들기
+          </button>
+        </div>
       </header>
 
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
