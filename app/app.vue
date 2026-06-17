@@ -155,6 +155,15 @@ const handleSendMessage = (content: string) => {
     }, 500)
   }
 }
+
+const handleLogout = () => {
+  isLoggedIn.value = false
+  currentUser.value = { id: '', name: '' }
+  inputNickname.value = ''
+  isLobby.value = true
+  activeRoom.value = null
+  onlineUsers.value = []
+}
 </script>
 
 <template>
