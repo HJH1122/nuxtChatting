@@ -18,12 +18,14 @@ import ChatInput from '~/components/chat/ChatInput.vue'
 const isLoggedIn = ref(false)
 const inputNickname = ref('')
 const isLobby = ref(true)
+const isCreatingRoom = ref(false)
 const showUserList = ref(true)
 const searchQuery = ref('')
 const isSearching = ref(false)
 
 // -- Mock Data --
 const currentUser = ref<User>({ id: '', name: '' })
+const newRoomTitle = ref('')
 
 // -- Methods --
 const handleLogin = () => {
@@ -131,6 +133,22 @@ const leaveRoom = () => {
   activeRoom.value = null
 }
 
+const goToCreateRoom = () => {
+  isCreatingRoom.value = true
+  isLobby.value = false
+}
+
+const cancelCreateRoom = () => {
+  isCreatingRoom.value = false
+  isLobby.value = true
+  newRoomTitle.value = ''
+}
+
+const handleCreateRoom = () => {
+  // 방 만들기 기능은 아직 구현하지 않음
+  console.log('Room Title:', newRoomTitle.value)
+}
+
 const handleSendMessage = (content: string) => {
   const newMessage: Message = {
     id: `msg-${Date.now()}`,
@@ -161,6 +179,7 @@ const handleLogout = () => {
   currentUser.value = { id: '', name: '' }
   inputNickname.value = ''
   isLobby.value = true
+  isCreatingRoom.value = false
   activeRoom.value = null
   onlineUsers.value = []
 }
@@ -222,7 +241,7 @@ const handleLogout = () => {
             <LogOut class="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
             로그아웃
           </button>
-          <button class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-bold shadow-xl shadow-blue-100 transition-all flex items-center gap-2 active:scale-95">
+          <button @click="goToCreateRoom" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-bold shadow-xl shadow-blue-100 transition-all flex items-center gap-2 active:scale-95">
             <PlusCircle class="w-5 h-5" />
             방 만들기
           </button>
@@ -259,6 +278,47 @@ const handleLogout = () => {
           <RefreshCw class="w-8 h-8" />
           <span class="font-bold text-sm">목록 새로고침</span>
         </button>
+      </div>
+    </div>
+
+    <!-- Create Room View -->
+    <div v-else-if="isCreatingRoom" class="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-blue-50 to-white animate-in fade-in zoom-in-95 duration-500">
+      <div class="w-full max-w-md">
+        <div class="text-center mb-10 space-y-3">
+          <div class="inline-flex bg-blue-600 p-4 rounded-[2rem] shadow-2xl shadow-blue-200 mb-4">
+            <PlusCircle class="w-10 h-10 text-white" />
+          </div>
+          <h1 class="text-4xl font-black tracking-tight text-gray-900">새 채팅방 만들기</h1>
+          <p class="text-gray-500 font-medium">함께 대화할 새로운 공간의<br/>이름을 정해주세요.</p>
+        </div>
+
+        <div class="bg-white p-10 rounded-[2.5rem] shadow-xl shadow-blue-100/50 border border-white space-y-6">
+          <div class="space-y-2">
+            <label class="text-sm font-bold text-gray-400 uppercase tracking-widest ml-1">Room Title</label>
+            <input 
+              v-model="newRoomTitle"
+              type="text" 
+              placeholder="예: 맛집 탐방, 개발 공부 등" 
+              class="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-lg font-bold placeholder:text-gray-300 focus:ring-2 focus:ring-blue-500 transition-all"
+              @keyup.enter="handleCreateRoom"
+            />
+          </div>
+          
+          <div class="flex flex-col gap-3">
+            <button 
+              @click="handleCreateRoom"
+              class="w-full bg-blue-600 hover:bg-blue-700 text-white py-5 rounded-2xl font-black text-lg shadow-xl shadow-blue-200 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+            >
+              방 만들기
+            </button>
+            <button 
+              @click="cancelCreateRoom"
+              class="w-full bg-gray-100 hover:bg-gray-200 text-gray-500 py-5 rounded-2xl font-black text-lg transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+            >
+              취소
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
