@@ -23,39 +23,14 @@ const showUserList = ref(true)
 const searchQuery = ref('')
 const isSearching = ref(false)
 
-// -- Mock Data --
+// -- Socket.io Composable --
+const { socket } = useSocket()
+
+// -- Chat State --
 const currentUser = ref<User>({ id: '', name: '' })
 const newRoomTitle = ref('')
-
-// -- Methods --
-const handleLogin = () => {
-  if (!inputNickname.value.trim()) return
-  
-  currentUser.value = {
-    id: `user-${Math.random().toString(36).substr(2, 9)}`,
-    name: inputNickname.value.trim(),
-    isHost: true
-  }
-  
-  // Update online users to include the new user
-  onlineUsers.value = [
-    currentUser.value,
-    { id: 'user-2', name: '김철수', isTyping: true },
-    { id: 'user-3', name: '이영희' },
-    { id: 'user-4', name: '박지민' }
-  ]
-  
-  isLoggedIn.value = true
-}
-
-const rooms = ref<Room[]>([
-  { id: 'general', name: '자유 게시판', creatorId: 'user-1', isLocked: false, announcement: '실시간 채팅 서비스에 오신 것을 환영합니다! 공지사항을 확인해 주세요.' },
-  { id: 'tech', name: '기술 공유', creatorId: 'user-2', isLocked: true },
-  { id: 'qna', name: 'Q&A 질문방', creatorId: 'user-3', isLocked: false }
-])
-
+const rooms = ref<Room[]>([])
 const activeRoom = ref<Room | null>(null)
-
 const onlineUsers = ref<User[]>([])
 
 const messages = ref<Message[]>([
@@ -123,6 +98,57 @@ const messages = ref<Message[]>([
 ])
 
 // -- Methods --
+const fetchRooms = async () => {
+  try {
+    const data = await $fetch<Room[]>('/api/rooms')
+    rooms.value = data
+  } catch (error) {
+    console.error('Failed to fetch rooms:', error)
+  }
+}
+
+const handleLogin = async () => {
+  if (!inputNickname.value.trim()) return
+  
+  try {
+    const user = await $fetch<any>('/api/users', {
+      method: 'POST',
+      body: { name: inputNickname.value.trim() }
+    })
+    
+    currentUser.value = {
+      id: user.id,
+      name: user.name,
+      isHost: true
+    }
+    
+    // Update online users to include the new user
+    onlineUsers.value = [
+      currentUser.value,
+      { id: 'user-2', name: '김철수', isTyping: true },
+      { id: 'user-3', name: '이영희' },
+      { id: 'user-4', name: '박지민' }
+    ]
+    
+    await fetchRooms()
+    isLoggedIn.value = true
+  } catch (error) {
+    console.error('Login failed:', error)
+  }
+}
+
+onMounted(async () => {
+  await fetchRooms()
+  
+  if (socket.value) {
+    socket.value.on('room-created', (room: Room) => {
+      if (!rooms.value.some(r => r.id === room.id)) {
+        rooms.value.unshift(room)
+      }
+    })
+  }
+})
+
 const enterRoom = (room: Room) => {
   activeRoom.value = room
   isLobby.value = false
@@ -144,9 +170,30 @@ const cancelCreateRoom = () => {
   newRoomTitle.value = ''
 }
 
-const handleCreateRoom = () => {
-  // 방 만들기 기능은 아직 구현하지 않음
-  console.log('Room Title:', newRoomTitle.value)
+const handleCreateRoom = async () => {
+  if (!newRoomTitle.value.trim()) return
+
+  try {
+    const room = await $fetch<Room>('/api/rooms', {
+      method: 'POST',
+      body: {
+        name: newRoomTitle.value.trim(),
+        creatorId: currentUser.value.id
+      }
+    })
+
+    if (socket.value) {
+      socket.value.emit('room-created', room)
+    }
+
+    newRoomTitle.value = ''
+    isCreatingRoom.value = false
+    isLobby.value = true
+    
+    await fetchRooms()
+  } catch (error) {
+    console.error('Failed to create room:', error)
+  }
 }
 
 const handleSendMessage = (content: string) => {
@@ -274,7 +321,7 @@ const handleLogout = () => {
         </div>
 
         <!-- Refresh Card -->
-        <button class="bg-white/50 border-2 border-dashed border-gray-200 rounded-[2rem] flex flex-col items-center justify-center gap-3 p-6 text-gray-400 hover:text-blue-500 hover:border-blue-200 hover:bg-blue-50/30 transition-all">
+        <button @click="fetchRooms" class="bg-white/50 border-2 border-dashed border-gray-200 rounded-[2rem] flex flex-col items-center justify-center gap-3 p-6 text-gray-400 hover:text-blue-500 hover:border-blue-200 hover:bg-blue-50/30 transition-all">
           <RefreshCw class="w-8 h-8" />
           <span class="font-bold text-sm">목록 새로고침</span>
         </button>

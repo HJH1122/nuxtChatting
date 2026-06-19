@@ -14,6 +14,10 @@ export default defineNitroPlugin((nitroApp) => {
       console.log(`User ${socket.id} joined room ${roomId}`)
     })
 
+    socket.on('room-created', (room) => {
+      io.emit('room-created', room)
+    })
+
     socket.on('message', (data) => {
       // Basic broadcast for now (no Prisma)
       io.to(data.roomId).emit('message', {
