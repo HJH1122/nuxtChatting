@@ -410,9 +410,7 @@ const handleLogout = () => {
             <Search class="w-5 h-5" />
           </button>
           
-          <button class="p-2.5 hover:bg-gray-100 rounded-xl text-gray-500 transition-colors">
-            <Settings class="w-5 h-5" />
-          </button>
+
           
           <button 
             @click="showUserList = !showUserList"
