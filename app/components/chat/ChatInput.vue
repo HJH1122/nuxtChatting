@@ -31,9 +31,6 @@ const submit = () => {
         <button class="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors" title="파일 첨부">
           <Plus class="w-5 h-5" />
         </button>
-        <button class="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors" title="이미지">
-          <ImageIcon class="w-5 h-5" />
-        </button>
         <button class="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors" title="투표 생성">
           <BarChart2 class="w-5 h-5" />
         </button>
