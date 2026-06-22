@@ -16,6 +16,7 @@ import ChatInput from '~/components/chat/ChatInput.vue'
 
 // -- State --
 const isLoggedIn = ref(false)
+const lastRefreshed = ref('')
 const inputNickname = ref('')
 const isLobby = ref(true)
 const isCreatingRoom = ref(false)
@@ -105,6 +106,10 @@ const fetchRooms = async () => {
   } catch (error) {
     console.error('Failed to fetch rooms:', error)
   }
+}
+const handleRefresh = async () => {
+  await fetchRooms()
+  lastRefreshed.value = new Date().toLocaleString()
 }
 
 const handleLogin = async () => {
@@ -321,7 +326,7 @@ const handleLogout = () => {
         </div>
 
         <!-- Refresh Card -->
-        <button @click="fetchRooms" class="bg-white/50 border-2 border-dashed border-gray-200 rounded-[2rem] flex flex-col items-center justify-center gap-3 p-6 text-gray-400 hover:text-blue-500 hover:border-blue-200 hover:bg-blue-50/30 transition-all">
+        <button @click="handleRefresh" class="bg-white/50 border-2 border-dashed border-gray-200 rounded-[2rem] flex flex-col items-center justify-center gap-3 p-6 text-gray-400 hover:text-blue-500 hover:border-blue-200 hover:bg-blue-50/30 transition-all">
           <RefreshCw class="w-8 h-8" />
           <span class="font-bold text-sm">목록 새로고침</span>
         </button>
