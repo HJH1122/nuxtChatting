@@ -30,74 +30,11 @@ const { socket } = useSocket()
 // -- Chat State --
 const currentUser = ref<User>({ id: '', name: '' })
 const newRoomTitle = ref('')
-const rooms = ref<Room[]>([])
-const activeRoom = ref<Room | null>(null)
-const onlineUsers = ref<User[]>([])
-
-const messages = ref<Message[]>([
-  { 
-    id: 'msg-1', 
-    senderId: 'bot', 
-    senderName: 'Assistant', 
-    content: '안녕하세요! 자유 게시판에 입장하셨습니다.', 
-    type: 'system', 
-    createdAt: new Date(Date.now() - 100000).toISOString() 
-  },
-  { 
-    id: 'msg-2', 
-    senderId: 'user-2', 
-    senderName: '김철수', 
-    content: '반갑습니다 여러분!', 
-    createdAt: new Date(Date.now() - 90000).toISOString() 
-  },
-  { 
-    id: 'msg-3', 
-    senderId: 'user-1', 
-    senderName: '나 (본인)', 
-    content: '네 안녕하세요! 이번 업데이트 내용 보셨나요?', 
-    createdAt: new Date(Date.now() - 80000).toISOString() 
-  },
-  { 
-    id: 'msg-4', 
-    senderId: 'user-3', 
-    senderName: '이영희', 
-    content: 'https://nuxt.com/docs/getting-started/introduction 여기 링크 참고해보세요!', 
-    createdAt: new Date(Date.now() - 70000).toISOString(),
-    linkPreview: {
-      url: 'https://nuxt.com/docs/getting-started/introduction',
-      title: 'Nuxt: The Intuitive Vue Framework',
-      description: 'Nuxt is an open source framework that makes web development intuitive and powerful.',
-      image: 'https://nuxt.com/social-card.png',
-      siteName: 'Nuxt'
-    }
-  },
-  { 
-    id: 'msg-5', 
-    senderId: 'user-1', 
-    senderName: '나 (본인)', 
-    content: '점심 메뉴 골라주세요!', 
-    type: 'poll',
-    createdAt: new Date(Date.now() - 60000).toISOString(),
-    poll: {
-      id: 'poll-1',
-      question: '오늘 점심 메뉴는?',
-      options: [
-        { id: 'opt-1', text: '김치찌개', votes: 12 },
-        { id: 'opt-2', text: '돈까스', votes: 15 },
-        { id: 'opt-3', text: '마라탕', votes: 8 }
-      ],
-      totalVotes: 35
-    }
-  },
-  { 
-    id: 'msg-6', 
-    senderId: 'user-2', 
-    senderName: '김철수', 
-    content: '오 돈까스 좋네요!', 
-    createdAt: new Date(Date.now() - 50000).toISOString() 
-  }
-])
-
+const rooms = ref<Room[]>([]);
+const activeRoom = ref<Room | null>(null);
+const onlineUsers = ref<User[]>([]);
+// 메시지는 이제 초기 로드 시 빈 배열로 시작합니다.
+const messages = ref<Message[]>([]);
 // -- Methods --
 const fetchRooms = async () => {
   try {
@@ -126,13 +63,11 @@ const handleLogin = async () => {
       name: user.name,
       isHost: true
     }
-    
+
     // Update online users to include the new user
     onlineUsers.value = [
       currentUser.value,
-      { id: 'user-2', name: '김철수', isTyping: true },
-      { id: 'user-3', name: '이영희' },
-      { id: 'user-4', name: '박지민' }
+
     ]
     
     await fetchRooms()
@@ -440,30 +375,32 @@ const handleLogout = () => {
             <div class="text-center py-8">
               <span class="text-[10px] font-bold text-gray-300 uppercase tracking-[0.2em] bg-gray-50 px-3 py-1 rounded-full">2026년 6월 14일 일요일</span>
             </div>
-            
-            <MessageItem 
-              v-for="msg in messages" 
-              :key="msg.id" 
-              :message="msg" 
-              :isOwn="msg.senderId === currentUser.id" 
-            />
-          </div>
 
-          <!-- Typing Indicators -->
-          <div class="px-6 h-6 flex items-center gap-2">
-            <div v-if="onlineUsers.some(u => u.isTyping && u.id !== currentUser.id)" class="flex items-center gap-2">
-              <div class="flex gap-1">
-                <span class="w-1 h-1 bg-blue-400 rounded-full animate-bounce"></span>
-                <span class="w-1 h-1 bg-blue-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
-                <span class="w-1 h-1 bg-blue-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
-              </div>
-              <span class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">누군가 입력 중...</span>
+            <!-- Messages List -->
+            <div class="space-y-2">
+              <MessageItem
+                  v-for="msg in messages"
+                  :key="msg.id"
+                  :message="msg"
+                  :isOwn="msg.senderId === currentUser.id"
+              />
             </div>
-          </div>
 
-          <!-- Input Area -->
-          <ChatInput @send="handleSendMessage" />
-        </div>
+            <!-- Typing Indicators -->
+            <div class="px-6 h-6 flex items-center gap-2">
+              <div v-if="onlineUsers.some(u => u.isTyping && u.id !== currentUser.id)" class="flex items-center gap-2">
+                <div class="flex gap-1">
+                  <span class="w-1 h-1 bg-blue-400 rounded-full animate-bounce"></span>
+                  <span class="w-1 h-1 bg-blue-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                  <span class="w-1 h-1 bg-blue-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+                </div>
+                <span class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">누군가 입력 중...</span>
+              </div>
+            </div>
+            </div>
+            <!-- Input Area -->
+            <ChatInput @send="handleSendMessage" />
+          </div>
 
         <!-- Right Sidebar (Users) -->
         <UserList 
@@ -475,6 +412,7 @@ const handleLogout = () => {
       </div>
     </div>
   </div>
+
 </template>
 
 <style>
