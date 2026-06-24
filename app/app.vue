@@ -324,7 +324,7 @@ const handleLogout = () => {
             </h2>
             <div class="flex items-center gap-1.5">
               <div class="w-1.5 h-1.5 rounded-full bg-green-500"></div>
-              <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{{ onlineUsers.length }} Users Online</span>
+              <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Online</span>
             </div>
           </div>
         </div>
