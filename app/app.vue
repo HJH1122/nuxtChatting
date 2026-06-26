@@ -16,7 +16,6 @@ import ChatInput from '~/components/chat/ChatInput.vue'
 
 // -- State --
 const isLoggedIn = ref(false)
-const lastRefreshed = ref('')
 const inputNickname = ref('')
 const isLobby = ref(true)
 const isCreatingRoom = ref(false)
@@ -43,10 +42,6 @@ const fetchRooms = async () => {
   } catch (error) {
     console.error('Failed to fetch rooms:', error)
   }
-}
-const handleRefresh = async () => {
-  await fetchRooms()
-  lastRefreshed.value = new Date().toLocaleString()
 }
 
 const handleLogin = async () => {
@@ -265,9 +260,9 @@ const handleLogout = () => {
           <RefreshCw class="w-8 h-8" />
           <span class="font-bold text-sm">목록 새로고침</span>
         </button>
-        <div v-if="lastRefreshed" class="text-center mt-4 flex items-center gap-2">
+        <div class="text-center mt-4 flex items-center gap-2">
             <svg class="w-3 h-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2l2-2m" /></svg>
-            <span class="text-sm text-gray-500 font-medium">마지막 업데이트: {{ lastRefreshed }}</span>
+
         </div>
       </div>
     </div>
