@@ -6,7 +6,9 @@ export const useSocket = () => {
   const isConnected = ref(false)
 
   onMounted(() => {
-    socket.value = io()
+    // 개발 환경에서는 3001 포트를 바라보게 하고, 상용 배포 시에는 기본 Origin을 타도록 합니다.
+    const socketUrl = import.meta.dev ? 'http://localhost:3001' : ''
+    socket.value = io(socketUrl)
 
     socket.value.on('connect', () => {
       isConnected.value = true
@@ -30,3 +32,4 @@ export const useSocket = () => {
     isConnected
   }
 }
+

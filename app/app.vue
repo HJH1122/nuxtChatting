@@ -56,14 +56,10 @@ const handleLogin = async () => {
     currentUser.value = {
       id: user.id,
       name: user.name,
-      isHost: true
+      isHost: false
     }
 
-    // Update online users to include the new user
-    onlineUsers.value = [
-      currentUser.value,
-
-    ]
+    onlineUsers.value = []
     
     await fetchRooms()
     isLoggedIn.value = true
@@ -74,24 +70,50 @@ const handleLogin = async () => {
 
 onMounted(async () => {
   await fetchRooms()
-  
-  if (socket.value) {
-    socket.value.on('room-created', (room: Room) => {
+})
+
+watch(socket, (newSocket) => {
+  if (newSocket) {
+    newSocket.on('room-created', (room: Room) => {
       if (!rooms.value.some(r => r.id === room.id)) {
         rooms.value.unshift(room)
       }
     })
+
+    newSocket.on('online-users', (users: User[]) => {
+      console.log('Received online users:', users)
+      onlineUsers.value = users
+    })
   }
-})
+}, { immediate: true })
 
 const enterRoom = (room: Room) => {
   activeRoom.value = room
   isLobby.value = false
+  
+  // 방의 creatorId와 현재 로그인한 유저의 id가 일치하는지 비교하여 방장(isHost) 여부를 판단합니다.
+  const isHost = room.creatorId === currentUser.value.id
+  currentUser.value.isHost = isHost
+  
+  if (socket.value) {
+    socket.value.emit('join-room', {
+      roomId: room.id,
+      user: {
+        id: currentUser.value.id,
+        name: currentUser.value.name,
+        isHost: isHost
+      }
+    })
+  }
 }
 
 const leaveRoom = () => {
+  if (socket.value && activeRoom.value) {
+    socket.value.emit('leave-room', activeRoom.value.id)
+  }
   isLobby.value = true
   activeRoom.value = null
+  onlineUsers.value = []
 }
 
 const goToCreateRoom = () => {
@@ -157,6 +179,9 @@ const handleSendMessage = (content: string) => {
 }
 
 const handleLogout = () => {
+  if (socket.value && activeRoom.value) {
+    socket.value.emit('leave-room', activeRoom.value.id)
+  }
   isLoggedIn.value = false
   currentUser.value = { id: '', name: '' }
   inputNickname.value = ''
@@ -396,17 +421,17 @@ const handleLogout = () => {
                 <span class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">누군가 입력 중...</span>
               </div>
             </div>
-            </div>
-            <!-- Input Area -->
-            <ChatInput @send="handleSendMessage" />
           </div>
+          <!-- Input Area -->
+          <ChatInput @send="handleSendMessage" />
+        </div>
 
         <!-- Right Sidebar (Users) -->
         <UserList 
           v-if="showUserList" 
           :users="onlineUsers" 
           :isHost="currentUser.isHost"
-          class="hidden md:flex"
+          class="absolute right-0 top-0 bottom-0 z-20 md:static md:flex"
         />
       </div>
     </div>

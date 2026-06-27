@@ -21,8 +21,8 @@ const emit = defineEmits(['kick', 'transfer'])
 
     <div class="flex-1 overflow-y-auto p-2 space-y-1">
       <div 
-        v-for="user in users" 
-        :key="user.id"
+        v-for="(user, index) in users" 
+        :key="user.id + '-' + index"
         class="group flex items-center justify-between p-2 rounded-lg hover:bg-white hover:shadow-sm transition-all cursor-default"
       >
         <div class="flex items-center gap-3">
