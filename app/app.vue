@@ -215,6 +215,33 @@ const handleLogout = () => {
   onlineUsers.value = []
   messages.value = []
 }
+
+const formatDateSeparator = (dateStr: string) => {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return ''
+  const year = d.getFullYear()
+  const month = d.getMonth() + 1
+  const date = d.getDate()
+  const dayOfWeek = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'][d.getDay()]
+  return `${year}년 ${month}월 ${date}일 ${dayOfWeek}`
+}
+
+const shouldShowDateSeparator = (msg: Message, index: number) => {
+  if (!msg.createdAt) return false
+  if (index === 0) return true
+  const prevMsg = messages.value[index - 1]
+  if (!prevMsg || !prevMsg.createdAt) return true
+  
+  const currDate = new Date(msg.createdAt).toDateString()
+  const prevDate = new Date(prevMsg.createdAt).toDateString()
+  
+  if (currDate === 'Invalid Date' || prevDate === 'Invalid Date') {
+    return false
+  }
+  
+  return currDate !== prevDate
+}
 </script>
 
 <template>
@@ -421,19 +448,19 @@ const handleLogout = () => {
 
           <!-- Messages -->
           <div class="flex-1 overflow-y-auto p-6 space-y-2">
-            <div class="text-center py-8">
-              <span class="text-[10px] font-bold text-gray-300 uppercase tracking-[0.2em] bg-gray-50 px-3 py-1 rounded-full">2026년 6월 14일 일요일</span>
-            </div>
+            <!-- Messages List with Dynamic Date Separators -->
+            <template v-for="(msg, index) in messages" :key="msg.id">
+              <div v-if="shouldShowDateSeparator(msg, index)" class="text-center py-4 select-none">
+                <span class="text-[10px] font-extrabold text-gray-400 uppercase tracking-[0.15em] bg-gray-100/60 backdrop-blur-sm px-4 py-1.5 rounded-full border border-gray-200/30 shadow-sm">
+                  {{ formatDateSeparator(msg.createdAt) }}
+                </span>
+              </div>
 
-            <!-- Messages List -->
-            <div class="space-y-2">
               <MessageItem
-                  v-for="msg in messages"
-                  :key="msg.id"
                   :message="msg"
                   :isOwn="msg.senderId === currentUser.id"
               />
-            </div>
+            </template>
 
             <!-- Typing Indicators -->
             <div class="px-6 h-6 flex items-center gap-2">
