@@ -72,6 +72,17 @@ onMounted(async () => {
   await fetchRooms()
 })
 
+const fetchMessages = async (roomId: string) => {
+  try {
+    const data = await $fetch<{ messages: Message[] }>('/api/messages', {
+      query: { roomId }
+    })
+    messages.value = data.messages
+  } catch (error) {
+    console.error('Failed to fetch messages:', error)
+  }
+}
+
 watch(socket, (newSocket) => {
   if (newSocket) {
     newSocket.on('room-created', (room: Room) => {
@@ -84,10 +95,15 @@ watch(socket, (newSocket) => {
       console.log('Received online users:', users)
       onlineUsers.value = users
     })
+
+    newSocket.on('message', (message: Message) => {
+      console.log('Received live message:', message)
+      messages.value.push(message)
+    })
   }
 }, { immediate: true })
 
-const enterRoom = (room: Room) => {
+const enterRoom = async (room: Room) => {
   activeRoom.value = room
   isLobby.value = false
   
@@ -95,6 +111,10 @@ const enterRoom = (room: Room) => {
   const isHost = room.creatorId === currentUser.value.id
   currentUser.value.isHost = isHost
   
+  // 1. 방에 존재하는 과거 대화 내용 불러오기
+  await fetchMessages(room.id)
+
+  // 2. 소켓 조인 요청
   if (socket.value) {
     socket.value.emit('join-room', {
       roomId: room.id,
@@ -114,6 +134,7 @@ const leaveRoom = () => {
   isLobby.value = true
   activeRoom.value = null
   onlineUsers.value = []
+  messages.value = [] // 대화방을 나갈 때 메시지 목록을 초기화합니다.
 }
 
 const goToCreateRoom = () => {
@@ -154,14 +175,13 @@ const handleCreateRoom = async () => {
 }
 
 const handleSendMessage = (content: string) => {
-  const newMessage: Message = {
-    id: `msg-${Date.now()}`,
-    senderId: currentUser.value.id,
-    senderName: currentUser.value.name,
-    content,
-    createdAt: new Date().toISOString()
-  }
-  messages.value.push(newMessage)
+  if (!content.trim() || !activeRoom.value || !socket.value) return
+
+  // 1. 소켓을 통해 메시지를 전송합니다 (서버 단에서 DB에 저장한 후 방의 모든 인원에게 브로드캐스트함).
+  socket.value.emit('message', {
+    roomId: activeRoom.value.id,
+    content: content.trim()
+  })
   
   // Fake bot response for search demonstration
   if (content.includes('검색')) {
@@ -178,6 +198,10 @@ const handleSendMessage = (content: string) => {
   }
 }
 
+const handleRefresh = async () => {
+  await fetchRooms()
+}
+
 const handleLogout = () => {
   if (socket.value && activeRoom.value) {
     socket.value.emit('leave-room', activeRoom.value.id)
@@ -189,6 +213,7 @@ const handleLogout = () => {
   isCreatingRoom.value = false
   activeRoom.value = null
   onlineUsers.value = []
+  messages.value = []
 }
 </script>
 

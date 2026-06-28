@@ -1,3 +1,5 @@
+import prisma from '../../utils/prisma'
+
 /** @type {import('h3').EventHandler<any>} */
 export default defineEventHandler(async (event) => {
     const { roomId, limit = 20, afterMessageId } = getQuery(event);

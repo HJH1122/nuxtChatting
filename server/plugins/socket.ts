@@ -95,21 +95,31 @@ export default defineNitroPlugin((nitroApp) => {
             socket.on('message', async (data) => {
                 if (!data || !data.content || !data.roomId) return;
 
+                const session = socketUserMap.get(socket.id);
+                if (!session || !session.user) {
+                    console.error("Session not found for socket.id:", socket.id);
+                    return;
+                }
+
                 // ⭐️ PERSISTENCE LAYER START ⭐️
                 try {
                     const messagePayload = await prisma.message.create({
                         data: {
                             content: data.content,
-                            senderId: socket.id, // TODO: Replace with authenticated user ID!
+                            senderId: session.user.id,
                             roomId: data.roomId,
                             type: "text",
                         },
+                        include: {
+                            sender: true
+                        }
                     });
 
                     const broadcastData = {
                         id: messagePayload.id,
                         content: messagePayload.content,
                         senderId: messagePayload.senderId,
+                        senderName: messagePayload.sender.name,
                         createdAt: messagePayload.createdAt.toISOString(),
                         type: messagePayload.type,
                     };
