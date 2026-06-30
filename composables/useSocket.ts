@@ -72,6 +72,7 @@ export const useSocket = (initialRoomId) => {
             id: 'temp-' + Date.now(), // 임시 ID 사용
             content: content,
             senderId: getCurrentUserId(), // 실제 인증된 유저 ID로 변경 필요
+            senderName: '나', // 로컬 유저 이름 (인증 컨텍스트에서 오기 전 임시 표시)
             createdAt: new Date().toISOString(),
             type: "text",
             isLive: true // 로컬에서 생성되었음을 표시 (처리 후 업데이트될 예정)
@@ -94,19 +95,27 @@ export const useSocket = (initialRoomId) => {
      */
     const loadInitialHistory = async ({ roomId, limit = 20, afterMessageId }) => {
         isLoading.value = true;
-        // TODO: API 호출 (e.g., useFetch(`/api/messages?roomId=${roomId}&limit=${limit}&afterMessageId=${afterMessageId}`))
-        console.log(`[API] Fetching initial chat history for ${roomId}...`);
-
-        // Mock Data Loading Logic
-        await new Promise(resolve => setTimeout(resolve, 300)); // Simulate network delay
-        const mockHistory = [
-            { id: '1', content: '안녕하세요! 채팅 기능 재구축 완료!', senderId: 'System', createdAt: new Date().toISOString(), type: 'system' },
-            { id: '2', content: '네, 로직이 매우 잘 설계되었습니다. 이제 DB 연동만 하면 되겠네요.', senderId: 'UserB', createdAt: new Date(Date.now() - 1000).toISOString(), type: 'text' },
-            // ... more mock messages
-        ];
-
-        chatHistory.value = mockHistory;
-        isLoading.value = false;
+        try {
+            console.log(`[API] Fetching initial chat history for ${roomId}...`);
+            const response = await $fetch(`/api/messages`, {
+                query: { roomId, limit, afterMessageId }
+            });
+            if (response && response.messages) {
+                chatHistory.value = response.messages;
+            }
+        } catch (error) {
+            console.warn("Failed to load chat history via API, using fallback mock data:", error);
+            
+            // Mock Data Loading Logic as fallback
+            await new Promise(resolve => setTimeout(resolve, 300)); // Simulate network delay
+            const mockHistory = [
+                { id: '1', content: '안녕하세요! 채팅 기능 재구축 완료!', senderId: 'system-id-long-value', senderName: 'System', createdAt: new Date().toISOString(), type: 'system' },
+                { id: '2', content: '네, 로직이 매우 잘 설계되었습니다. 이제 DB 연동만 하면 되겠네요.', senderId: 'user-b-uuid-like-long-string-identifier', senderName: 'UserB', createdAt: new Date(Date.now() - 1000).toISOString(), type: 'text' },
+            ];
+            chatHistory.value = mockHistory;
+        } finally {
+            isLoading.value = false;
+        }
     };
 
     // Mock function (Should be derived from Auth context)

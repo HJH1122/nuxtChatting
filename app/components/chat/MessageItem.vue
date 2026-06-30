@@ -17,6 +17,13 @@ const formatTime = (date: string) => {
 const isImage = (url: string) => {
   return /\.(jpg|jpeg|png|webp|gif|svg)$/.test(url.toLowerCase())
 }
+
+const formatSender = (name: string | undefined, id: string | undefined) => {
+  const displayName = name || '알 수 없음'
+  if (!id) return displayName
+  const truncatedId = id.length > 8 ? `${id.substring(0, 6)}...` : id
+  return `${displayName}(${truncatedId})`
+}
 </script>
 
 <template>
@@ -26,7 +33,7 @@ const isImage = (url: string) => {
   >
     <!-- Sender Name & Time -->
     <div class="flex items-center gap-2 mb-1 px-1">
-      <span v-if="!isOwn" class="text-xs font-bold text-gray-700">{{ message.senderName }}</span>
+      <span v-if="!isOwn" class="text-xs font-bold text-gray-700">{{ formatSender(message.senderName, message.senderId) }}</span>
       <span class="text-[10px] text-gray-400">{{ formatTime(message.createdAt) }}</span>
       <span v-if="message.isEdited" class="text-[10px] text-gray-300 italic">(수정됨)</span>
     </div>

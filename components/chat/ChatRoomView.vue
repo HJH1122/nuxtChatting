@@ -17,7 +17,9 @@
         <div v-if="!msg.id" class="opacity-70 text-gray-500">⚠️ 임시 메시지 로드 중...</div>
         <div v-else class="max-w-3xl p-2 rounded-lg shadow-sm" :class="{ 'bg-blue-100 border-l-4 border-blue-500': msg.isLive, 'border border-gray-200': !msg.isLive }">
           <div class="flex justify-between items-center text-xs mb-1">
-            <span :class="['font-semibold', (msg.senderId === localUserId ? 'text-blue-700' : 'text-gray-800')]">{{ msg.senderId }}</span>
+            <span :class="['font-semibold', (msg.senderId === localUserId ? 'text-blue-700' : 'text-gray-800')]">
+              {{ formatSender(msg.senderName, msg.senderId) }}
+            </span>
             <span>{{ formatTime(msg.createdAt) }}</span>
           </div>
           <div v-html="formatContent(msg.content)"></div>
@@ -89,9 +91,26 @@ const sendMessageFromInput = async () => {
 
 // --- Helper Functions ---
 
+const formatSender = (name, id) => {
+    const displayName = name || '알 수 없음';
+    if (!id) return displayName;
+    const truncatedId = id.length > 8 ? `${id.substring(0, 6)}...` : id;
+    return `${displayName}(${truncatedId})`;
+};
+
 const formatTime = (isoString) => {
     return new Date(isoString).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
 }
+
+const escapeHtml = (text) => {
+    if (!text) return '';
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+};
 
 const formatContent = (content) => {
     // ⭐️ CLAUDE.md 구현 필수 요소: Markdown/Link Preview 처리 로직이 여기에 들어가야 함

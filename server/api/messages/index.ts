@@ -17,6 +17,9 @@ export default defineEventHandler(async (event) => {
             orderBy: {
                 createdAt: 'desc'
             },
+            include: {
+                sender: true
+            },
             take: limit > 0 ? limit : undefined,
             skip: afterMessageId ? 1 : undefined, // Simple approach: skip 1 if cursor is provided (Needs refinement for true cursor logic)
         });
@@ -26,6 +29,7 @@ export default defineEventHandler(async (event) => {
             id: msg.id,
             content: msg.content,
             senderId: msg.senderId,
+            senderName: msg.sender.name,
             createdAt: msg.createdAt.toISOString(),
             type: msg.type,
         })).reverse(); // Reverse to show chronological order
