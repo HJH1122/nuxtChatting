@@ -174,17 +174,19 @@ const handleCreateRoom = async () => {
   }
 }
 
-const handleSendMessage = (content: string) => {
-  if (!content.trim() || !activeRoom.value || !socket.value) return
+const handleSendMessage = (content: string, attachment?: any, type: 'text' | 'image' | 'file' = 'text') => {
+  if ((!content.trim() && !attachment) || !activeRoom.value || !socket.value) return
 
   // 1. 소켓을 통해 메시지를 전송합니다 (서버 단에서 DB에 저장한 후 방의 모든 인원에게 브로드캐스트함).
   socket.value.emit('message', {
     roomId: activeRoom.value.id,
-    content: content.trim()
+    content: content.trim(),
+    attachment,
+    type
   })
   
   // Fake bot response for search demonstration
-  if (content.includes('검색')) {
+  if (content && content.includes('검색')) {
     setTimeout(() => {
       messages.value.push({
         id: `msg-bot-${Date.now()}`,

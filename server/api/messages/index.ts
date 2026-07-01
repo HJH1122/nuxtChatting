@@ -32,6 +32,12 @@ export default defineEventHandler(async (event) => {
             senderName: msg.sender.name,
             createdAt: msg.createdAt.toISOString(),
             type: msg.type,
+            attachment: msg.attachmentUrl ? {
+                name: msg.attachmentName || '',
+                url: msg.attachmentUrl,
+                type: msg.attachmentType || '',
+                size: msg.attachmentSize || undefined
+            } : undefined
         })).reverse(); // Reverse to show chronological order
 
         return {

@@ -65,8 +65,10 @@ const formatSender = (name: string | undefined, id: string | undefined) => {
         </p>
 
         <!-- Image Attachment -->
-        <div v-if="message.type === 'image' && message.attachment" class="mt-2 rounded-lg overflow-hidden border border-black/5">
-          <img :src="message.attachment.url" :alt="message.attachment.name" class="max-w-full h-auto block" />
+        <div v-if="message.type === 'image' && message.attachment" class="mt-2 rounded-lg overflow-hidden border border-black/5 cursor-pointer">
+          <a :href="message.attachment.url" target="_blank" class="block">
+            <img :src="message.attachment.url" :alt="message.attachment.name" class="max-w-full h-auto block hover:opacity-90 transition-opacity" />
+          </a>
         </div>
 
         <!-- File Attachment -->
@@ -76,11 +78,11 @@ const formatSender = (name: string | undefined, id: string | undefined) => {
           </div>
           <div class="flex-1 min-w-0">
             <p class="text-xs font-medium truncate">{{ message.attachment.name }}</p>
-            <p class="text-[10px] opacity-70">{{ (message.attachment.size || 0 / 1024).toFixed(1) }} KB</p>
+            <p class="text-[10px] opacity-70">{{ ((message.attachment.size || 0) / 1024).toFixed(1) }} KB</p>
           </div>
-          <button class="p-1.5 hover:bg-white/20 rounded-full transition-colors">
+          <a :href="message.attachment.url" :download="message.attachment.name" class="p-1.5 hover:bg-white/20 rounded-full transition-colors text-inherit">
             <Download class="w-4 h-4" />
-          </button>
+          </a>
         </div>
 
         <!-- Poll -->

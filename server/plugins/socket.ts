@@ -93,7 +93,7 @@ export default defineNitroPlugin((nitroApp) => {
 
             // --- 3. Message Handling (CORE CHANGE: Persistence first) ---
             socket.on('message', async (data) => {
-                if (!data || !data.content || !data.roomId) return;
+                if (!data || (!data.content && !data.attachment) || !data.roomId) return;
 
                 const session = socketUserMap.get(socket.id);
                 if (!session || !session.user) {
@@ -105,10 +105,14 @@ export default defineNitroPlugin((nitroApp) => {
                 try {
                     const messagePayload = await prisma.message.create({
                         data: {
-                            content: data.content,
+                            content: data.content || '',
                             senderId: session.user.id,
                             roomId: data.roomId,
-                            type: "text",
+                            type: data.type || "text",
+                            attachmentName: data.attachment?.name || null,
+                            attachmentUrl: data.attachment?.url || null,
+                            attachmentType: data.attachment?.type || null,
+                            attachmentSize: data.attachment?.size || null,
                         },
                         include: {
                             sender: true
@@ -122,6 +126,12 @@ export default defineNitroPlugin((nitroApp) => {
                         senderName: messagePayload.sender.name,
                         createdAt: messagePayload.createdAt.toISOString(),
                         type: messagePayload.type,
+                        attachment: messagePayload.attachmentUrl ? {
+                            name: messagePayload.attachmentName,
+                            url: messagePayload.attachmentUrl,
+                            type: messagePayload.attachmentType,
+                            size: messagePayload.attachmentSize
+                        } : undefined
                     };
 
                     // ⭐️ BROADCAST ⭐️
