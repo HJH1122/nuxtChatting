@@ -35,8 +35,14 @@ const handleInput = () => {
 
 const submit = () => {
   const trimmedMessage = message.value.trim()
+  
+  if (trimmedMessage === '/투표') {
+    openPollModal()
+    return
+  }
+
   if (trimmedMessage || attachedFile.value) {
-    let msgType: 'text' | 'image' | 'file' = 'text'
+    let msgType: 'text' | 'image' | 'file' | 'poll' = 'text'
     let attachmentData = undefined
 
     if (attachedFile.value) {
@@ -110,6 +116,51 @@ const onFileChange = async (e: Event) => {
     target.value = '' // Reset input
   }
 }
+
+// -- Poll State & Methods --
+const showPollModal = ref(false)
+const pollQuestion = ref('')
+const pollOptions = ref<string[]>(['', ''])
+
+const openPollModal = () => {
+  showPollModal.value = true
+  message.value = ''
+}
+
+const addPollOption = () => {
+  pollOptions.value.push('')
+}
+
+const removePollOption = (index: number) => {
+  if (pollOptions.value.length > 2) {
+    pollOptions.value.splice(index, 1)
+  }
+}
+
+const createPoll = () => {
+  const q = pollQuestion.value.trim()
+  const opts = pollOptions.value.map(o => o.trim()).filter(o => o !== '')
+
+  if (!q) {
+    alert('투표 질문을 입력해주세요.')
+    return
+  }
+  if (opts.length < 2) {
+    alert('최소 2개 이상의 선택 항목을 입력해주세요.')
+    return
+  }
+
+  // send emit: content, attachment, type, pollData
+  emit('send', '', undefined, 'poll', {
+    question: q,
+    options: opts
+  })
+
+  // Reset
+  pollQuestion.value = ''
+  pollOptions.value = ['', '']
+  showPollModal.value = false
+}
 </script>
 
 <template>
@@ -137,7 +188,12 @@ const onFileChange = async (e: Event) => {
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
         </button>
-        <button class="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors" title="투표 생성">
+        <button 
+          type="button"
+          @click="openPollModal"
+          class="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors" 
+          title="투표 생성"
+        >
           <BarChart2 class="w-5 h-5" />
         </button>
         <button class="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors" title="이모지">
@@ -192,7 +248,11 @@ const onFileChange = async (e: Event) => {
                 <span class="font-bold text-blue-600">/도움말</span>
                 <span class="text-gray-500 text-xs">명령어 목록 보기</span>
               </button>
-              <button class="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 flex items-center gap-3 transition-colors">
+              <button 
+                type="button"
+                @click="openPollModal"
+                class="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 flex items-center gap-3 transition-colors"
+              >
                 <span class="font-bold text-blue-600">/투표</span>
                 <span class="text-gray-500 text-xs">설문조사 생성</span>
               </button>
@@ -212,6 +272,91 @@ const onFileChange = async (e: Event) => {
           <Send class="w-5 h-5" />
         </button>
       </form>
+    </div>
+  </div>
+
+  <!-- Poll Creation Modal -->
+  <div v-if="showPollModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+    <div class="bg-white rounded-[2rem] w-full max-w-md p-8 border border-gray-100 shadow-2xl space-y-6 animate-in zoom-in-95 duration-200">
+      <div class="flex justify-between items-start">
+        <div>
+          <h3 class="text-xl font-black text-gray-900 flex items-center gap-2">
+            <BarChart2 class="w-5 h-5 text-blue-600" />
+            새 투표 만들기
+          </h3>
+          <p class="text-xs text-gray-400 font-medium mt-1">질문과 선택항목을 입력하여 투표를 생성하세요.</p>
+        </div>
+        <button type="button" @click="showPollModal = false" class="p-2 hover:bg-gray-50 rounded-xl text-gray-400 hover:text-gray-600 transition-colors">
+          <X class="w-5 h-5" />
+        </button>
+      </div>
+      
+      <div class="space-y-4">
+        <!-- Question Input -->
+        <div class="space-y-2">
+          <label class="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">질문</label>
+          <input 
+            v-model="pollQuestion"
+            type="text" 
+            placeholder="무엇에 대해 투표할까요?" 
+            class="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3 text-sm font-bold placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+          />
+        </div>
+        
+        <!-- Options Input -->
+        <div class="space-y-2">
+          <div class="flex justify-between items-center ml-1">
+            <label class="text-xs font-bold text-gray-400 uppercase tracking-widest">선택 항목</label>
+            <button 
+              type="button" 
+              @click="addPollOption" 
+              class="text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors"
+            >
+              + 항목 추가
+            </button>
+          </div>
+          
+          <div class="space-y-2 max-h-48 overflow-y-auto pr-1">
+            <div 
+              v-for="(option, index) in pollOptions" 
+              :key="index"
+              class="flex items-center gap-2"
+            >
+              <input 
+                v-model="pollOptions[index]"
+                type="text" 
+                :placeholder="`옵션 ${index + 1}`" 
+                class="flex-grow bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3 text-sm font-bold placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+              />
+              <button 
+                v-if="pollOptions.length > 2"
+                type="button" 
+                @click="removePollOption(index)"
+                class="p-3 hover:bg-red-50 hover:text-red-600 text-gray-400 rounded-2xl transition-colors"
+              >
+                <X class="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="flex flex-col gap-2 pt-2">
+        <button 
+          type="button"
+          @click="createPoll"
+          class="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-black text-sm shadow-xl shadow-blue-200 transition-all active:scale-[0.98]"
+        >
+          투표 올리기
+        </button>
+        <button 
+          type="button"
+          @click="showPollModal = false"
+          class="w-full bg-gray-50 hover:bg-gray-100 text-gray-500 py-4 rounded-2xl font-black text-sm transition-all active:scale-[0.98]"
+        >
+          취소
+        </button>
+      </div>
     </div>
   </div>
 </template>

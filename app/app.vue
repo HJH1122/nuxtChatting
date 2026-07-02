@@ -100,6 +100,14 @@ watch(socket, (newSocket) => {
       console.log('Received live message:', message)
       messages.value.push(message)
     })
+
+    newSocket.on('poll-updated', (updatedPoll: any) => {
+      console.log('Received poll update:', updatedPoll)
+      const msg = messages.value.find(m => m.poll && m.poll.id === updatedPoll.id)
+      if (msg) {
+        msg.poll = updatedPoll
+      }
+    })
   }
 }, { immediate: true })
 
@@ -174,15 +182,16 @@ const handleCreateRoom = async () => {
   }
 }
 
-const handleSendMessage = (content: string, attachment?: any, type: 'text' | 'image' | 'file' = 'text') => {
-  if ((!content.trim() && !attachment) || !activeRoom.value || !socket.value) return
+const handleSendMessage = (content: string, attachment?: any, type: 'text' | 'image' | 'file' | 'poll' = 'text', pollData?: any) => {
+  if ((!content.trim() && !attachment && !pollData) || !activeRoom.value || !socket.value) return
 
   // 1. 소켓을 통해 메시지를 전송합니다 (서버 단에서 DB에 저장한 후 방의 모든 인원에게 브로드캐스트함).
   socket.value.emit('message', {
     roomId: activeRoom.value.id,
     content: content.trim(),
     attachment,
-    type
+    type,
+    poll: pollData
   })
   
   // Fake bot response for search demonstration
@@ -198,6 +207,17 @@ const handleSendMessage = (content: string, attachment?: any, type: 'text' | 'im
       })
     }, 500)
   }
+}
+
+const handleVote = (pollId: string, optionId: string) => {
+  if (!socket.value || !activeRoom.value || !currentUser.value.id) return
+  
+  socket.value.emit('vote', {
+    roomId: activeRoom.value.id,
+    pollId,
+    optionId,
+    userId: currentUser.value.id
+  })
 }
 
 const handleRefresh = async () => {
@@ -461,6 +481,8 @@ const shouldShowDateSeparator = (msg: Message, index: number) => {
               <MessageItem
                   :message="msg"
                   :isOwn="msg.senderId === currentUser.id"
+                  :currentUserId="currentUser.id"
+                  @vote="handleVote"
               />
             </template>
 

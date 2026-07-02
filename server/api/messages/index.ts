@@ -18,9 +18,18 @@ export default defineEventHandler(async (event) => {
                 createdAt: 'desc'
             },
             include: {
-                sender: true
+                sender: true,
+                poll: {
+                    include: {
+                        options: {
+                            include: {
+                                votes: true
+                            }
+                        }
+                    }
+                }
             },
-            take: limit > 0 ? limit : undefined,
+            take: limit > 0 ? Number(limit) : undefined,
             skip: afterMessageId ? 1 : undefined, // Simple approach: skip 1 if cursor is provided (Needs refinement for true cursor logic)
         });
 
@@ -37,6 +46,17 @@ export default defineEventHandler(async (event) => {
                 url: msg.attachmentUrl,
                 type: msg.attachmentType || '',
                 size: msg.attachmentSize || undefined
+            } : undefined,
+            poll: msg.poll ? {
+                id: msg.poll.id,
+                question: msg.poll.question,
+                options: msg.poll.options.map(opt => ({
+                    id: opt.id,
+                    text: opt.text,
+                    votes: opt.votes.length,
+                    voters: opt.votes.map(v => v.userId)
+                })),
+                totalVotes: msg.poll.options.reduce((sum, opt) => sum + opt.votes.length, 0)
             } : undefined
         })).reverse(); // Reverse to show chronological order
 

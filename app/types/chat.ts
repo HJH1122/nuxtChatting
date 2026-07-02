@@ -21,12 +21,14 @@ export interface Poll {
   question: string;
   options: PollOption[];
   totalVotes: number;
+  userVotedOptionId?: string;
 }
 
 export interface PollOption {
   id: string;
   text: string;
   votes: number;
+  voters?: string[];
 }
 
 export interface LinkPreview {

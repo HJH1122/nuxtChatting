@@ -93,7 +93,7 @@ export default defineNitroPlugin((nitroApp) => {
 
             // --- 3. Message Handling (CORE CHANGE: Persistence first) ---
             socket.on('message', async (data) => {
-                if (!data || (!data.content && !data.attachment) || !data.roomId) return;
+                if (!data || (!data.content && !data.attachment && !data.poll) || !data.roomId) return;
 
                 const session = socketUserMap.get(socket.id);
                 if (!session || !session.user) {
@@ -103,6 +103,28 @@ export default defineNitroPlugin((nitroApp) => {
 
                 // ⭐️ PERSISTENCE LAYER START ⭐️
                 try {
+                    let pollPayload = null;
+                    if (data.type === 'poll' && data.poll) {
+                        pollPayload = await prisma.poll.create({
+                            data: {
+                                question: data.poll.question,
+                                roomId: data.roomId,
+                                options: {
+                                    create: data.poll.options.map((opt: string) => ({
+                                        text: opt
+                                    }))
+                                }
+                            },
+                            include: {
+                                options: {
+                                    include: {
+                                        votes: true
+                                    }
+                                }
+                            }
+                        });
+                    }
+
                     const messagePayload = await prisma.message.create({
                         data: {
                             content: data.content || '',
@@ -113,6 +135,7 @@ export default defineNitroPlugin((nitroApp) => {
                             attachmentUrl: data.attachment?.url || null,
                             attachmentType: data.attachment?.type || null,
                             attachmentSize: data.attachment?.size || null,
+                            pollId: pollPayload ? pollPayload.id : null,
                         },
                         include: {
                             sender: true
@@ -131,6 +154,17 @@ export default defineNitroPlugin((nitroApp) => {
                             url: messagePayload.attachmentUrl,
                             type: messagePayload.attachmentType,
                             size: messagePayload.attachmentSize
+                        } : undefined,
+                        poll: pollPayload ? {
+                            id: pollPayload.id,
+                            question: pollPayload.question,
+                            options: pollPayload.options.map(opt => ({
+                                id: opt.id,
+                                text: opt.text,
+                                votes: opt.votes.length,
+                                voters: opt.votes.map(v => v.userId)
+                            })),
+                            totalVotes: pollPayload.options.reduce((sum, opt) => sum + opt.votes.length, 0)
                         } : undefined
                     };
 
@@ -140,6 +174,80 @@ export default defineNitroPlugin((nitroApp) => {
                     console.error("Error saving or broadcasting message:", e);
                     // Broadcast failure to the room in case of DB issue
                     ioInstance.to(data.roomId).emit('message_error', 'Failed to send message: Database error.');
+                }
+            });
+
+            // --- 3.5 Vote Handling ---
+            socket.on('vote', async (data) => {
+                if (!data || !data.pollId || !data.optionId || !data.userId || !data.roomId) return;
+
+                try {
+                    // Check if the user has already voted on this poll
+                    const existingVote = await prisma.vote.findFirst({
+                        where: {
+                            userId: data.userId,
+                            option: {
+                                pollId: data.pollId
+                            }
+                        }
+                    });
+
+                    if (existingVote) {
+                        // Delete the old vote
+                        await prisma.vote.delete({
+                            where: {
+                                id: existingVote.id
+                            }
+                        });
+
+                        // If user clicked a different option, create a new vote
+                        if (existingVote.optionId !== data.optionId) {
+                            await prisma.vote.create({
+                                data: {
+                                    userId: data.userId,
+                                    optionId: data.optionId
+                                }
+                            });
+                        }
+                    } else {
+                        // Create a new vote
+                        await prisma.vote.create({
+                            data: {
+                                userId: data.userId,
+                                optionId: data.optionId
+                            }
+                        });
+                    }
+
+                    // Get updated poll results
+                    const updatedPoll = await prisma.poll.findUnique({
+                        where: { id: data.pollId },
+                        include: {
+                            options: {
+                                include: {
+                                    votes: true
+                                }
+                            }
+                        }
+                    });
+
+                    if (updatedPoll) {
+                        const pollData = {
+                            id: updatedPoll.id,
+                            question: updatedPoll.question,
+                            options: updatedPoll.options.map(opt => ({
+                                id: opt.id,
+                                text: opt.text,
+                                votes: opt.votes.length,
+                                voters: opt.votes.map(v => v.userId)
+                            })),
+                            totalVotes: updatedPoll.options.reduce((sum, opt) => sum + opt.votes.length, 0)
+                        };
+
+                        ioInstance.to(data.roomId).emit('poll-updated', pollData);
+                    }
+                } catch (e) {
+                    console.error("Error handling vote:", e);
                 }
             });
 

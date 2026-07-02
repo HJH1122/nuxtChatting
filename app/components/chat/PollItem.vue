@@ -4,9 +4,21 @@ import { Check } from 'lucide-vue-next'
 
 const props = defineProps<{
   poll: Poll
+  currentUserId: string
 }>()
 
-const selectedOption = ref<string | null>(null)
+const emit = defineEmits<{
+  (e: 'vote', optionId: string): void
+}>()
+
+const selectedOption = computed(() => {
+  const option = props.poll.options.find(opt => opt.voters?.includes(props.currentUserId))
+  return option ? option.id : null
+})
+
+const handleVote = (optionId: string) => {
+  emit('vote', optionId)
+}
 
 const getPercentage = (votes: number) => {
   if (props.poll.totalVotes === 0) return 0
@@ -27,7 +39,7 @@ const getPercentage = (votes: number) => {
         :key="option.id"
         class="w-full relative h-10 rounded-lg border text-left px-3 overflow-hidden transition-all hover:border-blue-300"
         :class="selectedOption === option.id ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-200'"
-        @click="selectedOption = option.id"
+        @click="handleVote(option.id)"
       >
         <!-- Progress Background -->
         <div 

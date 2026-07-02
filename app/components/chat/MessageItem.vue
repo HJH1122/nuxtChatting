@@ -6,6 +6,11 @@ import PollItem from './PollItem.vue'
 const props = defineProps<{
   message: Message
   isOwn: boolean
+  currentUserId: string
+}>()
+
+const emit = defineEmits<{
+  (e: 'vote', pollId: string, optionId: string): void
 }>()
 
 const showMenu = ref(false)
@@ -87,7 +92,11 @@ const formatSender = (name: string | undefined, id: string | undefined) => {
 
         <!-- Poll -->
         <div v-if="message.type === 'poll' && message.poll" class="mt-2">
-          <PollItem :poll="message.poll" />
+          <PollItem 
+            :poll="message.poll" 
+            :currentUserId="currentUserId" 
+            @vote="(optionId) => emit('vote', message.poll!.id, optionId)"
+          />
         </div>
 
         <!-- Link Preview -->
