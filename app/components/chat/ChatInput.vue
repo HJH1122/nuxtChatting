@@ -1,8 +1,92 @@
 <script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { Send, Plus, Smile, Image as ImageIcon, BarChart2, Hash, X, FileText } from 'lucide-vue-next'
 
 const message = ref('')
 const emit = defineEmits(['send', 'typing', 'stop-typing'])
+
+// -- 이모지 관련 상태 및 데이터 --
+const showEmojiPicker = ref(false)
+const activeCategory = ref('최근/인기')
+const emojiPickerRef = ref<HTMLElement | null>(null)
+const emojiButtonRef = ref<HTMLElement | null>(null)
+const textareaRef = ref<HTMLTextAreaElement | null>(null)
+
+const emojiCategories = [
+  {
+    name: '최근/인기',
+    emojis: ['😀', '😂', '🥰', '😍', '🤣', '😊', '🙏', '👍', '🔥', '👏', '🎉', '🚀', '❤️', '🤔', '👀', '😭']
+  },
+  {
+    name: '얼굴/감정',
+    emojis: ['😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃', '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '😚', '😙', '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '🤥', '😌', '😔', '😪', '🤤', '😴', '😷']
+  },
+  {
+    name: '제스처/사람',
+    emojis: ['👋', '🤚', '🖐️', '✋', '🖖', '👌', '🤌', '🤏', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇', '☝️', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '✍️', '💅', '🤳', '💪', '🦾']
+  },
+  {
+    name: '동물/자연',
+    emojis: ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐻‍❄️', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🐦', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🪱', '🐛', '🦋', '🐌', '🐞', '🐜', '🦟', '🦗', '🕷️', '🕸️', '🦂', '🐢', '🐍', '🦎', '🦖', '🦕', '🐙', '🦑']
+  },
+  {
+    name: '음식/음료',
+    emojis: ['🍏', '🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬', '🥒', '🌶️', '🫑', '🌽', '🥕', '🫒', '🧄', '🧅', '🥔', '🍠', '🥐', '🍞', '🥖', '🥨', '🥯', '🥞', '🧇', '🧀', '🍖', '🍗', '🥩', '🥓', '🍔', '🍟', '🍕', '🌭', '🥪', '🌮', '🌯', '🫓', '🥙', '🧆', '🥚', '🍳', '🥘', '🍲', '🥣', '🥗', '🍿', '🍟', '🧈', '🧂', '🥫', '🍱', '🍘', '🍙', '🍚', '🍛', '🍜', '🍝', '🍢', '🍣', '🍤', '🍥', '🥮', '🍡', '🥟', '🥠', '🥡', '🦀', '🦞', '🦐', '🦪', '🍦', '🍧', '🍨', '🍩', '🍪', '🎂', '🍰', '🧁', '🥧', '🍫', '🍬', '🍭', '🍮', '🍯', '🍼', '🥛', '☕', '🫖', '🍵', '🍶', '🍾', '🍷', '🍸', '🍹', '🍺', '🍻', '🥂', '🥃', '🥤', '🧋', '🧃', '🧉', '🧊', '🥢', '🍽️', '🍴', '🥄', '🏺']
+  },
+  {
+    name: '하트/기호',
+    emojis: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❤️‍🔥', '❤️‍🩹', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️', '✝️', '☪️', '🕉️', '☸️', '✡️', '🔯', '🕎', '☯️', '☦️', '🛐', '⛎', '♈', '♉', '♊', '♋', '♌', '♍', '♎', '♏', '♐', '♑', '♒', '♓', '🔀', '🔁', '🔂', '▶️', '⏩', '⏭️', '⏯️', '◀️', '⏪', '⏮️', '🔼', '⏫', '🔽', '⏬', '⏸️', '⏹️', '⏺️', '⏏️', '🎦', '📶', '📳', '📴', '⚠️', '🚸', '⛔', '🚫', '🚳', '🚭', '🚯', '🚱', '🚷', '🚊', '🛑']
+  }
+]
+
+const currentEmojis = computed(() => {
+  const cat = emojiCategories.find(c => c.name === activeCategory.value)
+  return cat ? cat.emojis : []
+})
+
+const toggleEmojiPicker = () => {
+  showEmojiPicker.value = !showEmojiPicker.value
+}
+
+const closeEmojiPicker = (e: MouseEvent) => {
+  if (
+    showEmojiPicker.value &&
+    emojiPickerRef.value &&
+    emojiButtonRef.value &&
+    !emojiPickerRef.value.contains(e.target as Node) &&
+    !emojiButtonRef.value.contains(e.target as Node)
+  ) {
+    showEmojiPicker.value = false
+  }
+}
+
+const insertEmoji = (emoji: string) => {
+  const el = textareaRef.value
+  if (!el) {
+    message.value += emoji
+    return
+  }
+
+  const startPos = el.selectionStart
+  const endPos = el.selectionEnd
+  const text = message.value
+
+  message.value = text.substring(0, startPos) + emoji + text.substring(endPos)
+  
+  nextTick(() => {
+    el.focus()
+    const newCursorPos = startPos + emoji.length
+    el.setSelectionRange(newCursorPos, newCursorPos)
+  })
+}
+
+onMounted(() => {
+  window.addEventListener('click', closeEmojiPicker)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('click', closeEmojiPicker)
+})
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const isUploading = ref(false)
@@ -60,6 +144,7 @@ const submit = () => {
     message.value = ''
     attachedFile.value = null
     emit('stop-typing')
+    showEmojiPicker.value = false
   }
 }
 
@@ -196,9 +281,52 @@ const createPoll = () => {
         >
           <BarChart2 class="w-5 h-5" />
         </button>
-        <button class="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors" title="이모지">
-          <Smile class="w-5 h-5" />
-        </button>
+        <div class="relative inline-block">
+          <button 
+            ref="emojiButtonRef"
+            type="button"
+            @click="toggleEmojiPicker"
+            class="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors" 
+            :class="{ 'bg-blue-50 text-blue-600': showEmojiPicker }"
+            title="이모지"
+          >
+            <Smile class="w-5 h-5" />
+          </button>
+          
+          <!-- 이모지 선택 피커 (Emoji Picker) -->
+          <div 
+            v-if="showEmojiPicker"
+            ref="emojiPickerRef"
+            class="absolute bottom-full left-0 mb-2 w-72 bg-white border border-gray-100 rounded-2xl shadow-xl z-50 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200"
+          >
+            <!-- 카테고리 탭 -->
+            <div class="flex border-b border-gray-100 bg-gray-50 p-1 overflow-x-auto shrink-0 select-none scrollbar-none">
+              <button 
+                v-for="category in emojiCategories" 
+                :key="category.name"
+                type="button"
+                @click="activeCategory = category.name"
+                class="px-2.5 py-1 text-xs font-bold rounded-lg transition-colors whitespace-nowrap"
+                :class="activeCategory === category.name ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-800'"
+              >
+                {{ category.name }}
+              </button>
+            </div>
+            
+            <!-- 이모지 그리드 -->
+            <div class="flex-grow overflow-y-auto p-3 max-h-48 grid grid-cols-7 gap-1.5 custom-scrollbar bg-white">
+              <button
+                v-for="emoji in currentEmojis"
+                :key="emoji"
+                type="button"
+                @click="insertEmoji(emoji)"
+                class="w-7 h-7 flex items-center justify-center text-lg rounded-md hover:bg-gray-100 active:bg-gray-200 transition-all duration-100 hover:scale-125"
+              >
+                {{ emoji }}
+              </button>
+            </div>
+          </div>
+        </div>
         <div class="w-px h-4 bg-gray-200 mx-2"></div>
         <button class="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors flex items-center gap-1 text-xs font-bold" title="코드 블록">
           <Hash class="w-4 h-4" />
@@ -232,6 +360,7 @@ const createPoll = () => {
       <form @submit.prevent="submit" class="relative flex items-end gap-2">
         <div class="flex-1 relative">
           <textarea
+            ref="textareaRef"
             v-model="message"
             @input="handleInput"
             @keydown.enter.prevent="submit"
@@ -360,3 +489,29 @@ const createPoll = () => {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* 가로 스크롤바 감추기 */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* 세로 스크롤바 커스텀 */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+</style>
