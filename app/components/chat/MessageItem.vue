@@ -7,6 +7,7 @@ const props = defineProps<{
   message: Message
   isOwn: boolean
   currentUserId: string
+  isHighlighted?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -53,10 +54,11 @@ const formatSender = (name: string | undefined, id: string | undefined) => {
 
       <!-- Content Bubble -->
       <div 
-        class="relative px-4 py-2.5 rounded-2xl shadow-sm overflow-hidden"
+        class="relative px-4 py-2.5 rounded-2xl shadow-sm overflow-hidden transition-all duration-300"
         :class="[
           isOwn ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white border border-gray-100 text-gray-800 rounded-tl-none',
-          message.type === 'system' ? 'bg-gray-100 text-gray-500 italic text-center mx-auto border-none shadow-none rounded-lg text-xs' : ''
+          message.type === 'system' ? 'bg-gray-100 text-gray-500 italic text-center mx-auto border-none shadow-none rounded-lg text-xs' : '',
+          isHighlighted ? 'ring-4 ring-yellow-400 animate-pulse' : ''
         ]"
       >
         <!-- Text Content -->

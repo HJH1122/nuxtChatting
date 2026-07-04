@@ -1,21 +1,27 @@
 import prisma from '../../utils/prisma'
 
-/** @type {import('h3').EventHandler<any>} */
 export default defineEventHandler(async (event) => {
-    const { roomId, limit = 20, afterMessageId } = getQuery(event);
+    const { roomId, q } = getQuery(event) as { roomId?: string, q?: string };
 
     if (!roomId) {
         throw createError({ statusCode: 400, statusMessage: 'Room ID is required.' });
     }
 
+    if (!q || !q.trim()) {
+        return { messages: [], count: 0 };
+    }
+
     try {
-        // Use Prisma to fetch messages with cursor-based pagination (Infinite Scroll)
         const queryMessages = await prisma.message.findMany({
             where: {
                 roomId: roomId,
+                content: {
+                    contains: q.trim(),
+                    mode: 'insensitive'
+                }
             },
             orderBy: {
-                createdAt: 'desc'
+                createdAt: 'asc'
             },
             include: {
                 sender: true,
@@ -28,13 +34,9 @@ export default defineEventHandler(async (event) => {
                         }
                     }
                 }
-            },
-            take: limit > 0 ? Number(limit) : undefined,
-            cursor: afterMessageId ? { id: String(afterMessageId) } : undefined,
-            skip: afterMessageId ? 1 : undefined,
+            }
         });
 
-        // Transform the records into a client-friendly format
         const messages = queryMessages.map(msg => ({
             id: msg.id,
             content: msg.content,
@@ -59,16 +61,15 @@ export default defineEventHandler(async (event) => {
                 })),
                 totalVotes: msg.poll.options.reduce((sum, opt) => sum + opt.votes.length, 0)
             } : undefined
-        })).reverse(); // Reverse to show chronological order
+        }));
 
         return {
             messages: messages,
-            count: queryMessages.length,
-            hasMore: queryMessages.length === limit // Simple heuristic for 'has more'
+            count: queryMessages.length
         };
 
     } catch (error) {
-        console.error("Error fetching chat history:", error);
-        throw createError({ statusCode: 500, statusMessage: 'Failed to fetch messages from the database.' });
+        console.error("Error searching messages:", error);
+        throw createError({ statusCode: 500, statusMessage: 'Failed to search messages from the database.' });
     }
 });

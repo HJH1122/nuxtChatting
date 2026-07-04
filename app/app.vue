@@ -22,6 +22,12 @@ const isCreatingRoom = ref(false)
 const showUserList = ref(true)
 const searchQuery = ref('')
 const isSearching = ref(false)
+const searchResults = ref<Message[]>([])
+const currentSearchIndex = ref(-1)
+const messagesContainer = ref<HTMLElement | null>(null)
+const isLoadingMore = ref(false)
+const hasMoreMessages = ref(true)
+let searchTimeout: any = null
 
 // -- Socket.io Composable --
 const { socket } = useSocket()
@@ -74,10 +80,16 @@ onMounted(async () => {
 
 const fetchMessages = async (roomId: string) => {
   try {
-    const data = await $fetch<{ messages: Message[] }>('/api/messages', {
+    const data = await $fetch<{ messages: Message[], hasMore: boolean }>('/api/messages', {
       query: { roomId }
     })
     messages.value = data.messages
+    hasMoreMessages.value = data.hasMore !== false
+    nextTick(() => {
+      if (messagesContainer.value) {
+        messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+      }
+    })
   } catch (error) {
     console.error('Failed to fetch messages:', error)
   }
@@ -99,6 +111,11 @@ watch(socket, (newSocket) => {
     newSocket.on('message', (message: Message) => {
       console.log('Received live message:', message)
       messages.value.push(message)
+      nextTick(() => {
+        if (messagesContainer.value) {
+          messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+        }
+      })
     })
 
     newSocket.on('poll-updated', (updatedPoll: any) => {
@@ -114,6 +131,8 @@ watch(socket, (newSocket) => {
 const enterRoom = async (room: Room) => {
   activeRoom.value = room
   isLobby.value = false
+  isSearching.value = false
+  hasMoreMessages.value = true
   
   // 방의 creatorId와 현재 로그인한 유저의 id가 일치하는지 비교하여 방장(isHost) 여부를 판단합니다.
   const isHost = room.creatorId === currentUser.value.id
@@ -143,6 +162,7 @@ const leaveRoom = () => {
   activeRoom.value = null
   onlineUsers.value = []
   messages.value = [] // 대화방을 나갈 때 메시지 목록을 초기화합니다.
+  isSearching.value = false
 }
 
 const goToCreateRoom = () => {
@@ -264,6 +284,150 @@ const shouldShowDateSeparator = (msg: Message, index: number) => {
   
   return currDate !== prevDate
 }
+
+const searchMessages = async () => {
+  if (!activeRoom.value || !searchQuery.value.trim()) {
+    searchResults.value = []
+    currentSearchIndex.value = -1
+    return
+  }
+  
+  try {
+    const data = await $fetch<{ messages: Message[], count: number }>('/api/messages/search', {
+      query: {
+        roomId: activeRoom.value.id,
+        q: searchQuery.value.trim()
+      }
+    })
+    searchResults.value = data.messages
+    if (data.messages.length > 0) {
+      currentSearchIndex.value = data.messages.length - 1
+      await scrollToMessage(data.messages[currentSearchIndex.value].id)
+    } else {
+      currentSearchIndex.value = -1
+    }
+  } catch (error) {
+    console.error('Failed to search messages:', error)
+  }
+}
+
+const scrollToMessage = async (messageId: string) => {
+  let attempts = 0
+  const maxAttempts = 10
+  
+  while (!messages.value.some(m => m.id === messageId) && attempts < maxAttempts) {
+    attempts++
+    if (messages.value.length === 0) break
+    const oldestMessageId = messages.value[0].id
+    
+    try {
+      const data = await $fetch<{ messages: Message[], count: number, hasMore: boolean }>('/api/messages', {
+        query: { 
+          roomId: activeRoom.value?.id, 
+          afterMessageId: oldestMessageId,
+          limit: 20
+        }
+      })
+      
+      if (data.messages && data.messages.length > 0) {
+        messages.value = [...data.messages, ...messages.value]
+      } else {
+        break
+      }
+    } catch (error) {
+      console.error('Failed to load older messages for search target:', error)
+      break
+    }
+  }
+
+  nextTick(() => {
+    const el = document.querySelector(`[data-message-id="${messageId}"]`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    } else {
+      console.warn(`Message element with id ${messageId} not found.`)
+    }
+  })
+}
+
+const goToPrevSearchResult = () => {
+  if (searchResults.value.length === 0) return
+  if (currentSearchIndex.value > 0) {
+    currentSearchIndex.value--
+  } else {
+    currentSearchIndex.value = searchResults.value.length - 1
+  }
+  scrollToMessage(searchResults.value[currentSearchIndex.value].id)
+}
+
+const goToNextSearchResult = () => {
+  if (searchResults.value.length === 0) return
+  if (currentSearchIndex.value < searchResults.value.length - 1) {
+    currentSearchIndex.value++
+  } else {
+    currentSearchIndex.value = 0
+  }
+  scrollToMessage(searchResults.value[currentSearchIndex.value].id)
+}
+
+const onSearchInput = () => {
+  if (searchTimeout) clearTimeout(searchTimeout)
+  searchTimeout = setTimeout(() => {
+    searchMessages()
+  }, 300)
+}
+
+const loadOlderMessages = async () => {
+  if (isLoadingMore.value || !hasMoreMessages.value || !activeRoom.value || messages.value.length === 0) return
+  isLoadingMore.value = true
+  
+  const oldestMessageId = messages.value[0].id
+  
+  try {
+    const data = await $fetch<{ messages: Message[], count: number, hasMore: boolean }>('/api/messages', {
+      query: { 
+        roomId: activeRoom.value.id, 
+        afterMessageId: oldestMessageId,
+        limit: 20
+      }
+    })
+    
+    if (data.messages && data.messages.length > 0) {
+      const container = messagesContainer.value
+      const previousScrollHeight = container ? container.scrollHeight : 0
+      
+      messages.value = [...data.messages, ...messages.value]
+      hasMoreMessages.value = data.hasMore
+      
+      nextTick(() => {
+        if (container) {
+          container.scrollTop = container.scrollHeight - previousScrollHeight
+        }
+      })
+    } else {
+      hasMoreMessages.value = false
+    }
+  } catch (error) {
+    console.error('Failed to load older messages:', error)
+  } finally {
+    isLoadingMore.value = false
+  }
+}
+
+const handleScroll = (event: Event) => {
+  const target = event.target as HTMLElement
+  if (target.scrollTop <= 10) {
+    loadOlderMessages()
+  }
+}
+
+watch(isSearching, (val) => {
+  if (!val) {
+    searchQuery.value = ''
+    searchResults.value = []
+    currentSearchIndex.value = -1
+  }
+})
 </script>
 
 <template>
@@ -428,17 +592,38 @@ const shouldShowDateSeparator = (msg: Message, index: number) => {
         </div>
 
         <div class="flex items-center gap-2">
-          <div v-if="isSearching" class="relative animate-in slide-in-from-right-4 duration-300">
-            <input 
-              v-model="searchQuery" 
-              type="text" 
-              placeholder="메시지 검색..." 
-              class="bg-gray-100 border-none rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 w-64"
-              @keyup.esc="isSearching = false"
-            />
-            <button @click="isSearching = false" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-              <PlusCircle class="w-4 h-4 rotate-45" />
-            </button>
+          <div v-if="isSearching" class="flex items-center gap-2 animate-in slide-in-from-right-4 duration-300">
+            <div class="relative flex items-center">
+              <input 
+                v-model="searchQuery" 
+                type="text" 
+                placeholder="메시지 검색..." 
+                class="bg-gray-100 border-none rounded-xl pl-4 pr-10 py-2 text-sm focus:ring-2 focus:ring-blue-500 w-64"
+                @input="onSearchInput"
+                @keyup.enter="goToNextSearchResult"
+                @keyup.esc="isSearching = false"
+              />
+              <button @click="isSearching = false" class="absolute right-3 text-gray-400 hover:text-gray-600">
+                <PlusCircle class="w-4 h-4 rotate-45" />
+              </button>
+            </div>
+            
+            <!-- Search Navigation Controls -->
+            <div v-if="searchResults.length > 0" class="flex items-center gap-1.5 bg-gray-50 border border-gray-100 rounded-xl px-3 py-1 text-xs text-gray-500">
+              <span class="font-bold text-gray-700">{{ currentSearchIndex + 1 }}</span>
+              <span class="text-gray-300">/</span>
+              <span>{{ searchResults.length }}</span>
+              <div class="w-px h-3.5 bg-gray-200 mx-1"></div>
+              <button @click="goToPrevSearchResult" class="p-1 hover:bg-gray-200 rounded text-gray-500 transition-colors" title="이전 결과 (위로)">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 15l7-7 7 7"/></svg>
+              </button>
+              <button @click="goToNextSearchResult" class="p-1 hover:bg-gray-200 rounded text-gray-500 transition-colors" title="다음 결과 (아래로)">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
+              </button>
+            </div>
+            <div v-else-if="searchQuery.trim()" class="text-xs text-gray-400 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2">
+              검색 결과 없음
+            </div>
           </div>
           <button 
             v-else
@@ -469,7 +654,7 @@ const shouldShowDateSeparator = (msg: Message, index: number) => {
           />
 
           <!-- Messages -->
-          <div class="flex-1 overflow-y-auto p-6 space-y-2">
+          <div ref="messagesContainer" class="flex-1 overflow-y-auto p-6 space-y-2" @scroll="handleScroll">
             <!-- Messages List with Dynamic Date Separators -->
             <template v-for="(msg, index) in messages" :key="msg.id">
               <div v-if="shouldShowDateSeparator(msg, index)" class="text-center py-4 select-none">
@@ -482,6 +667,8 @@ const shouldShowDateSeparator = (msg: Message, index: number) => {
                   :message="msg"
                   :isOwn="msg.senderId === currentUser.id"
                   :currentUserId="currentUser.id"
+                  :isHighlighted="searchResults.length > 0 && currentSearchIndex >= 0 && searchResults[currentSearchIndex].id === msg.id"
+                  :data-message-id="msg.id"
                   @vote="handleVote"
               />
             </template>
