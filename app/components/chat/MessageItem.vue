@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import { ref } from 'vue'
+import hljs from 'highlight.js'
+import 'highlight.js/styles/github-dark.css'
 import type { Message } from '~/types/chat'
-import { MoreVertical, Edit2, Trash2, FileText, Download, ExternalLink } from 'lucide-vue-next'
+import { MoreVertical, Edit2, Trash2, FileText, Download, ExternalLink, Copy, Check } from 'lucide-vue-next'
 import PollItem from './PollItem.vue'
 
 const props = defineProps<{
@@ -29,6 +32,74 @@ const formatSender = (name: string | undefined, id: string | undefined) => {
   if (!id) return displayName
   const truncatedId = id.length > 8 ? `${id.substring(0, 6)}...` : id
   return `${displayName}(${truncatedId})`
+}
+
+// --- Code Block Support ---
+interface ContentPart {
+  type: 'text' | 'code'
+  content: string
+  lang?: string
+}
+
+const parseMessageContent = (content: string): ContentPart[] => {
+  if (!content) return []
+  
+  const regex = /```(\w*)\n([\s\S]*?)```/g
+  const parts: ContentPart[] = []
+  let lastIndex = 0
+  let match
+  
+  while ((match = regex.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({
+        type: 'text',
+        content: content.substring(lastIndex, match.index)
+      })
+    }
+    
+    parts.push({
+      type: 'code',
+      lang: match[1] || 'plaintext',
+      content: match[2]
+    })
+    
+    lastIndex = regex.lastIndex
+  }
+  
+  if (lastIndex < content.length) {
+    parts.push({
+      type: 'text',
+      content: content.substring(lastIndex)
+    })
+  }
+  
+  return parts
+}
+
+const highlightCode = (code: string, lang: string | undefined) => {
+  if (lang && hljs.getLanguage(lang)) {
+    try {
+      return hljs.highlight(code, { language: lang }).value
+    } catch (e) {
+      console.error(e)
+    }
+  }
+  return hljs.highlightAuto(code).value
+}
+
+const copiedIndex = ref<number | null>(null)
+
+const handleCopyCode = (code: string, index: number) => {
+  navigator.clipboard.writeText(code.trim()).then(() => {
+    copiedIndex.value = index
+    setTimeout(() => {
+      if (copiedIndex.value === index) {
+        copiedIndex.value = null
+      }
+    }, 2000)
+  }).catch(err => {
+    console.error('Failed to copy: ', err)
+  })
 }
 </script>
 
@@ -62,12 +133,29 @@ const formatSender = (name: string | undefined, id: string | undefined) => {
         ]"
       >
         <!-- Text Content -->
-        <p v-if="message.content && message.type !== 'system'" class="text-sm leading-relaxed whitespace-pre-wrap break-words">
-          {{ message.content }}
-        </p>
+        <div v-if="message.content && message.type !== 'system'" class="text-sm leading-relaxed space-y-2">
+          <div v-for="(part, i) in parseMessageContent(message.content)" :key="i">
+            <p v-if="part.type === 'text'" class="whitespace-pre-wrap break-words">{{ part.content }}</p>
+            <div v-else-if="part.type === 'code'" class="my-3 rounded-xl overflow-hidden border border-gray-700/20 bg-slate-950 text-slate-100 font-mono text-xs shadow-md max-w-full">
+              <div class="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-800 text-slate-400 select-none">
+                <span class="uppercase tracking-wider font-extrabold text-[10px] text-blue-400">{{ part.lang }}</span>
+                <button 
+                  type="button"
+                  @click="handleCopyCode(part.content, i)" 
+                  class="hover:text-white transition-colors flex items-center gap-1 font-bold active:scale-95 duration-100"
+                >
+                  <Check v-if="copiedIndex === i" class="w-3.5 h-3.5 text-green-400" />
+                  <Copy v-else class="w-3.5 h-3.5" />
+                  <span>{{ copiedIndex === i ? '복사됨!' : '복사' }}</span>
+                </button>
+              </div>
+              <pre class="p-4 overflow-x-auto custom-scrollbar text-[12px] leading-normal font-mono bg-slate-950 text-left"><code :class="'language-' + part.lang" v-html="highlightCode(part.content, part.lang)"></code></pre>
+            </div>
+          </div>
+        </div>
 
         <!-- System Message -->
-        <p v-if="message.type === 'system'" class="px-2">
+        <p v-if="message.type === 'system'" class="px-2 whitespace-pre-wrap">
           {{ message.content }}
         </p>
 

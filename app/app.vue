@@ -205,10 +205,43 @@ const handleCreateRoom = async () => {
 const handleSendMessage = (content: string, attachment?: any, type: 'text' | 'image' | 'file' | 'poll' = 'text', pollData?: any) => {
   if ((!content.trim() && !attachment && !pollData) || !activeRoom.value || !socket.value) return
 
+  const trimmedContent = content.trim()
+
+  // 챗봇 명령어 처리 (로컬 도우미 메시지)
+  if (trimmedContent === '/도움말') {
+    messages.value.push({
+      id: `msg-help-${Date.now()}`,
+      senderId: 'bot',
+      senderName: 'Assistant',
+      content: `🤖 [사용 가능한 명령어 안내]
+• /도움말 : 사용 가능한 명령어 목록 안내
+• /방장 : 현재 채팅방의 방장 정보 확인
+• /투표 : 설문조사 생성 폼 호출
+• /코드 : 마크다운 코드 블록 삽입`,
+      type: 'system',
+      createdAt: new Date().toISOString()
+    })
+    return
+  }
+
+  if (trimmedContent === '/방장') {
+    const hostUser = onlineUsers.value.find(u => u.isHost)
+    const hostName = hostUser ? hostUser.name : '지정된 방장이 없거나 오프라인'
+    messages.value.push({
+      id: `msg-host-${Date.now()}`,
+      senderId: 'bot',
+      senderName: 'Assistant',
+      content: `👑 현재 채팅방의 방장은 '${hostName}'입니다.`,
+      type: 'system',
+      createdAt: new Date().toISOString()
+    })
+    return
+  }
+
   // 1. 소켓을 통해 메시지를 전송합니다 (서버 단에서 DB에 저장한 후 방의 모든 인원에게 브로드캐스트함).
   socket.value.emit('message', {
     roomId: activeRoom.value.id,
-    content: content.trim(),
+    content: trimmedContent,
     attachment,
     type,
     poll: pollData

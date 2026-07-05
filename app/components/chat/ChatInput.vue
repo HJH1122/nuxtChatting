@@ -125,6 +125,11 @@ const submit = () => {
     return
   }
 
+  if (trimmedMessage === '/코드') {
+    openCodeModal()
+    return
+  }
+
   if (trimmedMessage || attachedFile.value) {
     let msgType: 'text' | 'image' | 'file' | 'poll' = 'text'
     let attachmentData = undefined
@@ -246,6 +251,57 @@ const createPoll = () => {
   pollOptions.value = ['', '']
   showPollModal.value = false
 }
+
+// -- Code Modal State & Methods --
+const showCodeModal = ref(false)
+const codeLanguage = ref('javascript')
+const codeContent = ref('')
+
+const openCodeModal = () => {
+  showCodeModal.value = true
+  codeContent.value = ''
+  if (message.value.trim() === '/코드') {
+    message.value = ''
+  }
+}
+
+const insertCodeBlock = () => {
+  const lang = codeLanguage.value
+  const code = codeContent.value.trim()
+  
+  if (!code) {
+    alert('코드를 입력해주세요.')
+    return
+  }
+
+  const block = `\`\`\`${lang}\n${code}\n\`\`\``
+  const el = textareaRef.value
+
+  if (!el) {
+    message.value = (message.value ? message.value + '\n' : '') + block
+  } else {
+    const startPos = el.selectionStart
+    const endPos = el.selectionEnd
+    const text = message.value
+    
+    const beforeText = text.substring(0, startPos)
+    const afterText = text.substring(endPos)
+    
+    const prefix = beforeText && !beforeText.endsWith('\n') ? '\n' : ''
+    const suffix = afterText && !afterText.startsWith('\n') ? '\n' : ''
+    
+    message.value = beforeText + prefix + block + suffix + afterText
+    
+    nextTick(() => {
+      el.focus()
+      const newCursorPos = startPos + prefix.length + block.length + suffix.length
+      el.setSelectionRange(newCursorPos, newCursorPos)
+    })
+  }
+
+  codeContent.value = ''
+  showCodeModal.value = false
+}
 </script>
 
 <template>
@@ -328,7 +384,12 @@ const createPoll = () => {
           </div>
         </div>
         <div class="w-px h-4 bg-gray-200 mx-2"></div>
-        <button class="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors flex items-center gap-1 text-xs font-bold" title="코드 블록">
+        <button 
+          type="button"
+          @click="openCodeModal"
+          class="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors flex items-center gap-1 text-xs font-bold" 
+          title="코드 블록"
+        >
           <Hash class="w-4 h-4" />
           CODE
         </button>
@@ -373,7 +434,11 @@ const createPoll = () => {
           <div v-if="message.startsWith('/')" class="absolute bottom-full left-0 w-full mb-2 bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-bottom-2">
             <div class="p-2 border-b bg-gray-50 text-[10px] font-bold text-gray-400 tracking-wider">사용 가능한 명령어</div>
             <div class="max-h-48 overflow-y-auto">
-              <button class="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 flex items-center gap-3 transition-colors">
+              <button 
+                type="button"
+                @click="message = '/도움말'; submit()"
+                class="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 flex items-center gap-3 transition-colors"
+              >
                 <span class="font-bold text-blue-600">/도움말</span>
                 <span class="text-gray-500 text-xs">명령어 목록 보기</span>
               </button>
@@ -385,9 +450,21 @@ const createPoll = () => {
                 <span class="font-bold text-blue-600">/투표</span>
                 <span class="text-gray-500 text-xs">설문조사 생성</span>
               </button>
-              <button class="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 flex items-center gap-3 transition-colors">
+              <button 
+                type="button"
+                @click="message = '/방장'; submit()"
+                class="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 flex items-center gap-3 transition-colors"
+              >
                 <span class="font-bold text-blue-600">/방장</span>
                 <span class="text-gray-500 text-xs">현재 방장 정보 확인</span>
+              </button>
+              <button 
+                type="button"
+                @click="openCodeModal"
+                class="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 flex items-center gap-3 transition-colors"
+              >
+                <span class="font-bold text-blue-600">/코드</span>
+                <span class="text-gray-500 text-xs">마크다운 코드 블록 삽입</span>
               </button>
             </div>
           </div>
@@ -481,6 +558,74 @@ const createPoll = () => {
         <button 
           type="button"
           @click="showPollModal = false"
+          class="w-full bg-gray-50 hover:bg-gray-100 text-gray-500 py-4 rounded-2xl font-black text-sm transition-all active:scale-[0.98]"
+        >
+          취소
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Code Block Insertion Modal -->
+  <div v-if="showCodeModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+    <div class="bg-white rounded-[2rem] w-full max-w-lg p-8 border border-gray-100 shadow-2xl space-y-6 animate-in zoom-in-95 duration-200">
+      <div class="flex justify-between items-start">
+        <div>
+          <h3 class="text-xl font-black text-gray-900 flex items-center gap-2">
+            <Hash class="w-5 h-5 text-blue-600" />
+            코드 블록 삽입
+          </h3>
+          <p class="text-xs text-gray-400 font-medium mt-1">프로그래밍 언어를 선택하고 코드를 입력하세요.</p>
+        </div>
+        <button type="button" @click="showCodeModal = false" class="p-2 hover:bg-gray-50 rounded-xl text-gray-400 hover:text-gray-600 transition-colors">
+          <X class="w-5 h-5" />
+        </button>
+      </div>
+
+      <div class="space-y-4">
+        <!-- Language Selection -->
+        <div class="space-y-2">
+          <label class="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">언어 선택</label>
+          <select 
+            v-model="codeLanguage"
+            class="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3 text-sm font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+          >
+            <option value="javascript">JavaScript</option>
+            <option value="typescript">TypeScript</option>
+            <option value="python">Python</option>
+            <option value="java">Java</option>
+            <option value="html">HTML</option>
+            <option value="css">CSS</option>
+            <option value="cpp">C++</option>
+            <option value="go">Go</option>
+            <option value="sql">SQL</option>
+            <option value="plaintext">Plain Text</option>
+          </select>
+        </div>
+
+        <!-- Code Input -->
+        <div class="space-y-2">
+          <label class="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">코드 내용</label>
+          <textarea
+            v-model="codeContent"
+            rows="8"
+            placeholder="여기에 코드를 입력하거나 붙여넣으세요..."
+            class="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 text-xs font-mono placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none"
+          ></textarea>
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-2 pt-2">
+        <button 
+          type="button"
+          @click="insertCodeBlock"
+          class="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-black text-sm shadow-xl shadow-blue-200 transition-all active:scale-[0.98]"
+        >
+          코드 삽입하기
+        </button>
+        <button 
+          type="button"
+          @click="showCodeModal = false"
           class="w-full bg-gray-50 hover:bg-gray-100 text-gray-500 py-4 rounded-2xl font-black text-sm transition-all active:scale-[0.98]"
         >
           취소
