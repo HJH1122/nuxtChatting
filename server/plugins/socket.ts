@@ -251,6 +251,121 @@ export default defineNitroPlugin((nitroApp) => {
                 }
             });
 
+            // --- 3.6 Edit Message Handling ---
+            socket.on('edit-message', async (data) => {
+                if (!data || !data.messageId || !data.content || !data.roomId) return;
+
+                const session = socketUserMap.get(socket.id);
+                if (!session || !session.user) {
+                    console.error("Session not found for socket.id:", socket.id);
+                    return;
+                }
+
+                try {
+                    // Check ownership
+                    const message = await prisma.message.findUnique({
+                        where: { id: data.messageId }
+                    });
+
+                    if (!message) {
+                        console.error("Message not found:", data.messageId);
+                        return;
+                    }
+
+                    if (message.senderId !== session.user.id) {
+                        console.error("Unauthorized edit attempt by user:", session.user.id);
+                        return;
+                    }
+
+                    // Update message content
+                    const updatedMessage = await prisma.message.update({
+                        where: { id: data.messageId },
+                        data: {
+                            content: data.content,
+                            isEdited: true
+                        },
+                        include: {
+                            sender: true
+                        }
+                    });
+
+                    const broadcastData = {
+                        id: updatedMessage.id,
+                        content: updatedMessage.content,
+                        senderId: updatedMessage.senderId,
+                        senderName: updatedMessage.sender.name,
+                        createdAt: updatedMessage.createdAt.toISOString(),
+                        type: updatedMessage.type,
+                        isEdited: updatedMessage.isEdited,
+                        attachment: updatedMessage.attachmentUrl ? {
+                            name: updatedMessage.attachmentName,
+                            url: updatedMessage.attachmentUrl,
+                            type: updatedMessage.attachmentType,
+                            size: updatedMessage.attachmentSize
+                        } : undefined
+                    };
+
+                    ioInstance.to(data.roomId).emit('message-updated', broadcastData);
+                } catch (e) {
+                    console.error("Error editing message:", e);
+                }
+            });
+
+            // --- 3.7 Delete Message Handling ---
+            socket.on('delete-message', async (data) => {
+                if (!data || !data.messageId || !data.roomId) return;
+
+                const session = socketUserMap.get(socket.id);
+                if (!session || !session.user) {
+                    console.error("Session not found for socket.id:", socket.id);
+                    return;
+                }
+
+                try {
+                    // Check ownership or host status
+                    const message = await prisma.message.findUnique({
+                        where: { id: data.messageId }
+                    });
+
+                    if (!message) {
+                        console.error("Message not found:", data.messageId);
+                        return;
+                    }
+
+                    const isOwnMessage = message.senderId === session.user.id;
+
+                    const room = await prisma.room.findUnique({
+                        where: { id: data.roomId }
+                    });
+                    const isRoomHost = room?.creatorId === session.user.id;
+
+                    if (!isOwnMessage && !isRoomHost) {
+                        console.error("Unauthorized delete attempt by user:", session.user.id);
+                        return;
+                    }
+
+                    // Delete the message
+                    await prisma.message.delete({
+                        where: { id: data.messageId }
+                    });
+
+                    // If it was a poll, try deleting the poll structure too
+                    if (message.pollId) {
+                        try {
+                            await prisma.poll.delete({
+                                where: { id: message.pollId }
+                            });
+                        } catch (pollError) {
+                            console.error("Error deleting related poll:", pollError);
+                        }
+                    }
+
+                    ioInstance.to(data.roomId).emit('message-deleted', data.messageId);
+                } catch (e) {
+                    console.error("Error deleting message:", e);
+                }
+            });
+
             // --- 4. Disconnect Logic (Cleanup) ---
             socket.on('disconnect', () => {
                 console.log('User disconnected:', socket.id);

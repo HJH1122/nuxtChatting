@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
 import type { Message } from '~/types/chat'
@@ -11,13 +11,57 @@ const props = defineProps<{
   isOwn: boolean
   currentUserId: string
   isHighlighted?: boolean
+  isHost?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'vote', pollId: string, optionId: string): void
+  (e: 'edit', messageId: string, content: string): void
+  (e: 'delete', messageId: string): void
 }>()
 
 const showMenu = ref(false)
+const isEditing = ref(false)
+const editContent = ref(props.message.content)
+
+const closeMenu = (e: MouseEvent) => {
+  const target = e.target as HTMLElement
+  if (!target.closest('.message-menu-container')) {
+    showMenu.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', closeMenu)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeMenu)
+})
+
+const startEdit = () => {
+  editContent.value = props.message.content
+  isEditing.value = true
+  showMenu.value = false
+}
+
+const cancelEdit = () => {
+  isEditing.value = false
+}
+
+const submitEdit = () => {
+  const trimmed = editContent.value.trim()
+  if (!trimmed) return
+  emit('edit', props.message.id, trimmed)
+  isEditing.value = false
+}
+
+const handleDelete = () => {
+  showMenu.value = false
+  if (confirm('정말 이 메시지를 삭제하시겠습니까?')) {
+    emit('delete', props.message.id)
+  }
+}
 
 const formatTime = (date: string) => {
   return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -115,12 +159,24 @@ const handleCopyCode = (code: string, index: number) => {
       <span v-if="message.isEdited" class="text-[10px] text-gray-300 italic">(수정됨)</span>
     </div>
 
-    <div class="flex items-start gap-2 max-w-full">
+    <div class="flex items-start gap-2 max-w-full relative">
       <!-- Own Message Menu (Left of bubble) -->
-      <div v-if="isOwn" class="opacity-0 group-hover:opacity-100 transition-opacity self-center">
-        <button class="p-1 hover:bg-gray-100 rounded text-gray-400">
+      <div v-if="isOwn" class="relative message-menu-container opacity-0 group-hover:opacity-100 transition-opacity self-center">
+        <button @click="showMenu = !showMenu" class="p-1 hover:bg-gray-100 rounded text-gray-400" aria-label="메뉴">
           <MoreVertical class="w-4 h-4" />
         </button>
+        
+        <!-- Dropdown Menu -->
+        <div v-if="showMenu" class="absolute bottom-full right-0 mb-1 w-24 bg-white border border-gray-200 rounded-xl shadow-lg py-1 z-30">
+          <button @click="startEdit" class="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-1.5">
+            <Edit2 class="w-3.5 h-3.5" />
+            수정
+          </button>
+          <button @click="handleDelete" class="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-1.5">
+            <Trash2 class="w-3.5 h-3.5" />
+            삭제
+          </button>
+        </div>
       </div>
 
       <!-- Content Bubble -->
@@ -134,7 +190,23 @@ const handleCopyCode = (code: string, index: number) => {
       >
         <!-- Text Content -->
         <div v-if="message.content && message.type !== 'system'" class="text-sm leading-relaxed space-y-2">
-          <div v-for="(part, i) in parseMessageContent(message.content)" :key="i">
+          <!-- Edit Form -->
+          <div v-if="isEditing" class="flex flex-col gap-2 min-w-[200px] py-1">
+            <textarea 
+              v-model="editContent" 
+              class="w-full bg-white text-gray-900 border border-transparent rounded-xl p-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none resize-none font-sans"
+              rows="2"
+              @keydown.enter.prevent="submitEdit"
+              @keydown.esc="cancelEdit"
+            ></textarea>
+            <div class="flex justify-end gap-1.5">
+              <button @click="cancelEdit" class="px-2.5 py-1 text-[11px] font-bold bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors">취소</button>
+              <button @click="submitEdit" class="px-2.5 py-1 text-[11px] font-bold bg-white text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">확인</button>
+            </div>
+          </div>
+          
+          <!-- Normal Content -->
+          <div v-else v-for="(part, i) in parseMessageContent(message.content)" :key="i">
             <p v-if="part.type === 'text'" class="whitespace-pre-wrap break-words">{{ part.content }}</p>
             <div v-else-if="part.type === 'code'" class="my-3 rounded-xl overflow-hidden border border-gray-700/20 bg-slate-950 text-slate-100 font-mono text-xs shadow-md max-w-full">
               <div class="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-800 text-slate-400 select-none">
@@ -205,14 +277,31 @@ const handleCopyCode = (code: string, index: number) => {
       </div>
 
       <!-- Other Message Menu (Right of bubble) -->
-      <div v-if="!isOwn" class="opacity-0 group-hover:opacity-100 transition-opacity self-center">
-        <button class="p-1 hover:bg-gray-100 rounded text-gray-400">
+      <div v-if="!isOwn && isHost" class="relative message-menu-container opacity-0 group-hover:opacity-100 transition-opacity self-center">
+        <button @click="showMenu = !showMenu" class="p-1 hover:bg-gray-100 rounded text-gray-400" aria-label="메뉴">
           <MoreVertical class="w-4 h-4" />
         </button>
+        
+        <!-- Dropdown Menu (Only delete for host) -->
+        <div v-if="showMenu" class="absolute bottom-full left-0 mb-1 w-24 bg-white border border-gray-200 rounded-xl shadow-lg py-1 z-30">
+          <button @click="handleDelete" class="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-1.5">
+            <Trash2 class="w-3.5 h-3.5" />
+            삭제
+          </button>
+        </div>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+</style>
 
 <style scoped>
 .line-clamp-2 {

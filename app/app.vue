@@ -125,6 +125,19 @@ watch(socket, (newSocket) => {
         msg.poll = updatedPoll
       }
     })
+
+    newSocket.on('message-updated', (updatedMessage: Message) => {
+      console.log('Received message update:', updatedMessage)
+      const index = messages.value.findIndex(m => m.id === updatedMessage.id)
+      if (index !== -1) {
+        messages.value[index] = { ...messages.value[index], ...updatedMessage }
+      }
+    })
+
+    newSocket.on('message-deleted', (messageId: string) => {
+      console.log('Received message deletion:', messageId)
+      messages.value = messages.value.filter(m => m.id !== messageId)
+    })
   }
 }, { immediate: true })
 
@@ -270,6 +283,23 @@ const handleVote = (pollId: string, optionId: string) => {
     pollId,
     optionId,
     userId: currentUser.value.id
+  })
+}
+
+const handleEditMessage = (messageId: string, content: string) => {
+  if (!socket.value || !activeRoom.value) return
+  socket.value.emit('edit-message', {
+    roomId: activeRoom.value.id,
+    messageId,
+    content
+  })
+}
+
+const handleDeleteMessage = (messageId: string) => {
+  if (!socket.value || !activeRoom.value) return
+  socket.value.emit('delete-message', {
+    roomId: activeRoom.value.id,
+    messageId
   })
 }
 
@@ -700,9 +730,12 @@ watch(isSearching, (val) => {
                   :message="msg"
                   :isOwn="msg.senderId === currentUser.id"
                   :currentUserId="currentUser.id"
+                  :isHost="currentUser.isHost"
                   :isHighlighted="searchResults.length > 0 && currentSearchIndex >= 0 && searchResults[currentSearchIndex].id === msg.id"
                   :data-message-id="msg.id"
                   @vote="handleVote"
+                  @edit="handleEditMessage"
+                  @delete="handleDeleteMessage"
               />
             </template>
 
