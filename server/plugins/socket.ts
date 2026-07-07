@@ -366,6 +366,151 @@ export default defineNitroPlugin((nitroApp) => {
                 }
             });
 
+            // --- 3.8 Kick User Handling ---
+            socket.on('kick-user', async (data) => {
+                if (!data || !data.roomId || !data.userId) return;
+
+                const session = socketUserMap.get(socket.id);
+                if (!session || !session.user || !session.user.isHost) {
+                    console.error("Unauthorized kick attempt by socket:", socket.id);
+                    return;
+                }
+
+                // Find target socket ID and target user info before deleting
+                let targetSocketId: string | null = null;
+                let targetUser: { id: string; name: string } | null = null;
+                for (const [sId, sSession] of socketUserMap.entries()) {
+                    if (sSession.roomId === data.roomId && sSession.user.id === data.userId) {
+                        targetSocketId = sId;
+                        targetUser = sSession.user;
+                        break;
+                    }
+                }
+
+                if (targetSocketId && targetUser) {
+                    const targetSocket = ioInstance.sockets.sockets.get(targetSocketId);
+                    
+                    // 1. Clean up socket memory map first
+                    socketUserMap.delete(targetSocketId);
+                    const usersInRoom = roomUsers.get(data.roomId);
+                    if (usersInRoom) {
+                        usersInRoom.delete(targetSocketId);
+                        ioInstance.to(data.roomId).emit('online-users', Array.from(usersInRoom.values()));
+                    }
+
+                    // 2. Broadcast system message: "[유저명] 님이 강퇴되었습니다."
+                    try {
+                        const messagePayload = await prisma.message.create({
+                            data: {
+                                content: `🚨 '${targetUser.name}' 님이 방장에 의해 강제 퇴장되었습니다.`,
+                                senderId: session.user.id, // Use current host's id to satisfy foreign key constraint
+                                roomId: data.roomId,
+                                type: 'system',
+                            },
+                            include: {
+                                sender: true
+                            }
+                        });
+
+                        const broadcastData = {
+                            id: messagePayload.id,
+                            content: messagePayload.content,
+                            senderId: messagePayload.senderId,
+                            senderName: 'System',
+                            createdAt: messagePayload.createdAt.toISOString(),
+                            type: messagePayload.type
+                        };
+
+                        ioInstance.to(data.roomId).emit('message', broadcastData);
+                    } catch (e) {
+                        console.error("Error creating kick system message:", e);
+                    }
+
+                    // 3. Notify the target user and make them leave the socket room
+                    if (targetSocket) {
+                        targetSocket.emit('kicked', { roomId: data.roomId });
+                        targetSocket.leave(data.roomId);
+                    }
+
+                    console.log(`[Socket] User ${targetUser.name} (${data.userId}) was kicked from room ${data.roomId}`);
+                }
+            });
+
+            // --- 3.9 Transfer Host Handling ---
+            socket.on('transfer-host', async (data) => {
+                if (!data || !data.roomId || !data.userId) return;
+
+                const session = socketUserMap.get(socket.id);
+                if (!session || !session.user || !session.user.isHost) {
+                    console.error("Unauthorized transfer-host attempt by socket:", socket.id);
+                    return;
+                }
+
+                try {
+                    // Update room creator in Database
+                    await prisma.room.update({
+                        where: { id: data.roomId },
+                        data: { creatorId: data.userId }
+                    });
+
+                    // Update memory state
+                    const usersInRoom = roomUsers.get(data.roomId);
+                    let targetUser: { id: string; name: string } | null = null;
+                    if (usersInRoom) {
+                        for (const [sId, u] of usersInRoom.entries()) {
+                            if (u.id === session.user.id) {
+                                u.isHost = false;
+                                const oldHostSession = socketUserMap.get(sId);
+                                if (oldHostSession) oldHostSession.user.isHost = false;
+                            }
+                            if (u.id === data.userId) {
+                                u.isHost = true;
+                                targetUser = u;
+                                const newHostSession = socketUserMap.get(sId);
+                                if (newHostSession) newHostSession.user.isHost = true;
+                            }
+                        }
+                        ioInstance.to(data.roomId).emit('online-users', Array.from(usersInRoom.values()));
+                    }
+
+                    if (targetUser) {
+                        // Broadcast system message about host transfer
+                        const messagePayload = await prisma.message.create({
+                            data: {
+                                content: `👑 방장 권한이 '${targetUser.name}' 님에게 위임되었습니다.`,
+                                senderId: data.userId, // Use the new host's ID
+                                roomId: data.roomId,
+                                type: 'system',
+                            },
+                            include: {
+                                sender: true
+                            }
+                        });
+
+                        const broadcastData = {
+                            id: messagePayload.id,
+                            content: messagePayload.content,
+                            senderId: messagePayload.senderId,
+                            senderName: 'System',
+                            createdAt: messagePayload.createdAt.toISOString(),
+                            type: messagePayload.type
+                        };
+
+                        ioInstance.to(data.roomId).emit('message', broadcastData);
+                    }
+
+                    // Notify clients to update their activeRoom.creatorId and isHost state
+                    ioInstance.to(data.roomId).emit('host-transferred', {
+                        roomId: data.roomId,
+                        newHostId: data.userId
+                    });
+
+                    console.log(`[Socket] Host of room ${data.roomId} transferred to user ${data.userId}`);
+                } catch (e) {
+                    console.error("Error transferring host:", e);
+                }
+            });
+
             // --- 4. Disconnect Logic (Cleanup) ---
             socket.on('disconnect', () => {
                 console.log('User disconnected:', socket.id);

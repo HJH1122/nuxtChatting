@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref, onMounted, onUnmounted } from 'vue'
 import type { User } from '~/types/chat'
 import { Crown, MoreHorizontal, UserMinus, ShieldAlert } from 'lucide-vue-next'
 
@@ -8,6 +9,29 @@ defineProps<{
 }>()
 
 const emit = defineEmits(['kick', 'transfer'])
+
+const activeDropdownUserId = ref<string | null>(null)
+
+const toggleDropdown = (userId: string, event: Event) => {
+  event.stopPropagation()
+  if (activeDropdownUserId.value === userId) {
+    activeDropdownUserId.value = null
+  } else {
+    activeDropdownUserId.value = userId
+  }
+}
+
+const closeDropdown = () => {
+  activeDropdownUserId.value = null
+}
+
+onMounted(() => {
+  window.addEventListener('click', closeDropdown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('click', closeDropdown)
+})
 </script>
 
 <template>
@@ -45,10 +69,38 @@ const emit = defineEmits(['kick', 'transfer'])
         </div>
 
         <!-- Host Actions -->
-        <div v-if="isHost && !user.isHost" class="opacity-0 group-hover:opacity-100 transition-opacity">
-          <button class="p-1 hover:bg-gray-100 rounded text-gray-400" title="관리">
-            <MoreHorizontal class="w-4 h-4" />
-          </button>
+        <div v-if="isHost && !user.isHost" class="relative">
+          <div class="opacity-0 group-hover:opacity-100 transition-opacity" :class="{ 'opacity-100': activeDropdownUserId === user.id }">
+            <button 
+              @click="toggleDropdown(user.id, $event)"
+              class="p-1 hover:bg-gray-100 rounded text-gray-400" 
+              title="관리"
+            >
+              <MoreHorizontal class="w-4 h-4" />
+            </button>
+          </div>
+
+          <!-- Dropdown Menu -->
+          <div 
+            v-if="activeDropdownUserId === user.id" 
+            class="absolute right-0 mt-1 w-32 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-50"
+            @click.stop
+          >
+            <button 
+              @click="emit('kick', user.id); activeDropdownUserId = null"
+              class="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-1.5 font-medium transition-colors"
+            >
+              <UserMinus class="w-3.5 h-3.5" />
+              강제 퇴장
+            </button>
+            <button 
+              @click="emit('transfer', user.id); activeDropdownUserId = null"
+              class="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 font-medium transition-colors"
+            >
+              <Crown class="w-3.5 h-3.5 text-yellow-500" />
+              방장 위임
+            </button>
+          </div>
         </div>
       </div>
     </div>

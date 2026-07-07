@@ -138,6 +138,22 @@ watch(socket, (newSocket) => {
       console.log('Received message deletion:', messageId)
       messages.value = messages.value.filter(m => m.id !== messageId)
     })
+
+    newSocket.on('kicked', ({ roomId }: { roomId: string }) => {
+      console.log('Received kicked event for room:', roomId)
+      if (activeRoom.value && activeRoom.value.id === roomId) {
+        alert('방장에 의해 강제 퇴장되었습니다.')
+        leaveRoom()
+      }
+    })
+
+    newSocket.on('host-transferred', ({ roomId, newHostId }: { roomId: string, newHostId: string }) => {
+      console.log('Host transferred in room:', roomId, 'to:', newHostId)
+      if (activeRoom.value && activeRoom.value.id === roomId) {
+        activeRoom.value.creatorId = newHostId
+        currentUser.value.isHost = (newHostId === currentUser.value.id)
+      }
+    })
   }
 }, { immediate: true })
 
@@ -305,6 +321,32 @@ const handleDeleteMessage = (messageId: string) => {
 
 const handleRefresh = async () => {
   await fetchRooms()
+}
+
+const handleKickUser = (userId: string) => {
+  if (!socket.value || !activeRoom.value) return
+  const targetUser = onlineUsers.value.find(u => u.id === userId)
+  if (!targetUser) return
+
+  if (confirm(`'${targetUser.name}' 님을 정말 강퇴하시겠습니까?`)) {
+    socket.value.emit('kick-user', {
+      roomId: activeRoom.value.id,
+      userId: userId
+    })
+  }
+}
+
+const handleTransferHost = (userId: string) => {
+  if (!socket.value || !activeRoom.value) return
+  const targetUser = onlineUsers.value.find(u => u.id === userId)
+  if (!targetUser) return
+
+  if (confirm(`'${targetUser.name}' 님에게 방장 권한을 위임하시겠습니까?`)) {
+    socket.value.emit('transfer-host', {
+      roomId: activeRoom.value.id,
+      userId: userId
+    })
+  }
 }
 
 const handleLogout = () => {
@@ -760,6 +802,8 @@ watch(isSearching, (val) => {
           v-if="showUserList" 
           :users="onlineUsers" 
           :isHost="currentUser.isHost"
+          @kick="handleKickUser"
+          @transfer="handleTransferHost"
           class="absolute right-0 top-0 bottom-0 z-20 md:static md:flex"
         />
       </div>
