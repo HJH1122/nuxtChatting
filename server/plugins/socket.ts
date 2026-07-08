@@ -400,25 +400,13 @@ export default defineNitroPlugin((nitroApp) => {
 
                     // 2. Broadcast system message: "[유저명] 님이 강퇴되었습니다."
                     try {
-                        const messagePayload = await prisma.message.create({
-                            data: {
-                                content: `🚨 '${targetUser.name}' 님이 방장에 의해 강제 퇴장되었습니다.`,
-                                senderId: session.user.id, // Use current host's id to satisfy foreign key constraint
-                                roomId: data.roomId,
-                                type: 'system',
-                            },
-                            include: {
-                                sender: true
-                            }
-                        });
-
                         const broadcastData = {
-                            id: messagePayload.id,
-                            content: messagePayload.content,
-                            senderId: messagePayload.senderId,
+                            id: `system-kick-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                            content: `🚨 '${targetUser.name}' 님이 방장에 의해 강제 퇴장되었습니다.`,
+                            senderId: session.user.id, // Use current host's id to satisfy format
                             senderName: 'System',
-                            createdAt: messagePayload.createdAt.toISOString(),
-                            type: messagePayload.type
+                            createdAt: new Date().toISOString(),
+                            type: 'system'
                         };
 
                         ioInstance.to(data.roomId).emit('message', broadcastData);
@@ -475,25 +463,13 @@ export default defineNitroPlugin((nitroApp) => {
 
                     if (targetUser) {
                         // Broadcast system message about host transfer
-                        const messagePayload = await prisma.message.create({
-                            data: {
-                                content: `👑 방장 권한이 '${targetUser.name}' 님에게 위임되었습니다.`,
-                                senderId: data.userId, // Use the new host's ID
-                                roomId: data.roomId,
-                                type: 'system',
-                            },
-                            include: {
-                                sender: true
-                            }
-                        });
-
                         const broadcastData = {
-                            id: messagePayload.id,
-                            content: messagePayload.content,
-                            senderId: messagePayload.senderId,
+                            id: `system-transfer-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                            content: `👑 방장 권한이 '${targetUser.name}' 님에게 위임되었습니다.`,
+                            senderId: data.userId, // Use the new host's ID
                             senderName: 'System',
-                            createdAt: messagePayload.createdAt.toISOString(),
-                            type: messagePayload.type
+                            createdAt: new Date().toISOString(),
+                            type: 'system'
                         };
 
                         ioInstance.to(data.roomId).emit('message', broadcastData);
