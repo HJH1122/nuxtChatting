@@ -30,6 +30,16 @@ export default defineNitroPlugin((nitroApp) => {
                         return
                     }
 
+                    // Check if the room is locked before joining
+                    const roomDb = await prisma.room.findUnique({
+                        where: { id: roomId }
+                    })
+                    if (roomDb && roomDb.isLocked && user && roomDb.creatorId !== user.id) {
+                        socket.emit('join-room-failed', { roomId, reason: 'locked' })
+                        console.log(`[Socket] User ${user.name} (${user.id}) blocked from joining locked room ${roomId}`)
+                        return
+                    }
+
                     await socket.join(roomId);
                     console.log(`[${socket.id}] User joined room ${roomId}`);
 
@@ -484,6 +494,67 @@ export default defineNitroPlugin((nitroApp) => {
                     console.log(`[Socket] Host of room ${data.roomId} transferred to user ${data.userId}`);
                 } catch (e) {
                     console.error("Error transferring host:", e);
+                }
+            });
+
+            // --- 3.95 Toggle Room Lock Handling ---
+            socket.on('toggle-room-lock', async (data) => {
+                if (!data || !data.roomId || !data.userId) return;
+
+                const session = socketUserMap.get(socket.id);
+                if (!session || !session.user || !session.user.isHost) {
+                    console.error("Unauthorized toggle-room-lock attempt by socket:", socket.id);
+                    return;
+                }
+
+                try {
+                    const room = await prisma.room.findUnique({
+                        where: { id: data.roomId }
+                    });
+
+                    if (!room) {
+                        console.error("Room not found:", data.roomId);
+                        return;
+                    }
+
+                    if (room.creatorId !== data.userId) {
+                        console.error("Unauthorized lock attempt: User is not creator");
+                        return;
+                    }
+
+                    const updatedRoom = await prisma.room.update({
+                        where: { id: data.roomId },
+                        data: { isLocked: !room.isLocked }
+                    });
+
+                    // 1. Notify clients in the room to update activeRoom.isLocked
+                    ioInstance.to(data.roomId).emit('room-lock-toggled', {
+                        roomId: data.roomId,
+                        isLocked: updatedRoom.isLocked
+                    });
+
+                    // 2. Notify all clients (for lobby updates)
+                    ioInstance.emit('lobby-room-updated', {
+                        roomId: data.roomId,
+                        isLocked: updatedRoom.isLocked
+                    });
+
+                    // 3. Broadcast system message
+                    const systemMsg = {
+                        id: `system-lock-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                        content: updatedRoom.isLocked 
+                            ? "🔒 방장에 의해 채팅방이 잠겼습니다. 새로운 사용자의 입장이 제한됩니다." 
+                            : "🔓 방장에 의해 채팅방 잠금이 해제되었습니다.",
+                        senderId: 'system',
+                        senderName: 'System',
+                        createdAt: new Date().toISOString(),
+                        type: 'system'
+                    };
+                    ioInstance.to(data.roomId).emit('message', systemMsg);
+
+                    console.log(`[Socket] Room ${data.roomId} lock status changed to: ${updatedRoom.isLocked}`);
+                } catch (e) {
+                    console.error("Error toggling room lock:", e);
                 }
             });
 

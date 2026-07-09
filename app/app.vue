@@ -6,7 +6,9 @@ import {
   Search, 
   RefreshCw, 
   PlusCircle,
-  MessageSquare
+  MessageSquare,
+  Lock,
+  Unlock
 } from 'lucide-vue-next'
 import type { Message, User, Room } from '~/types/chat'
 import AnnouncementBar from '~/components/chat/AnnouncementBar.vue'
@@ -154,17 +156,44 @@ watch(socket, (newSocket) => {
         currentUser.value.isHost = (newHostId === currentUser.value.id)
       }
     })
+
+    newSocket.on('room-lock-toggled', ({ roomId, isLocked }: { roomId: string, isLocked: boolean }) => {
+      console.log('Room lock toggled:', roomId, isLocked)
+      if (activeRoom.value && activeRoom.value.id === roomId) {
+        activeRoom.value.isLocked = isLocked
+      }
+    })
+
+    newSocket.on('lobby-room-updated', ({ roomId, isLocked }: { roomId: string, isLocked: boolean }) => {
+      console.log('Lobby room updated:', roomId, isLocked)
+      const room = rooms.value.find(r => r.id === roomId)
+      if (room) {
+        room.isLocked = isLocked
+      }
+    })
+
+    newSocket.on('join-room-failed', ({ roomId, reason }: { roomId: string, reason: string }) => {
+      console.log('Join room failed:', roomId, reason)
+      if (reason === 'locked') {
+        alert('이 방은 방장에 의해 잠겨있어 입장할 수 없습니다.')
+        leaveRoom()
+      }
+    })
   }
 }, { immediate: true })
 
 const enterRoom = async (room: Room) => {
+  const isHost = room.creatorId === currentUser.value.id
+  if (room.isLocked && !isHost) {
+    alert('이 방은 방장에 의해 잠겨있어 입장할 수 없습니다.')
+    return
+  }
+
   activeRoom.value = room
   isLobby.value = false
   isSearching.value = false
   hasMoreMessages.value = true
   
-  // 방의 creatorId와 현재 로그인한 유저의 id가 일치하는지 비교하여 방장(isHost) 여부를 판단합니다.
-  const isHost = room.creatorId === currentUser.value.id
   currentUser.value.isHost = isHost
   
   // 1. 방에 존재하는 과거 대화 내용 불러오기
@@ -347,6 +376,14 @@ const handleTransferHost = (userId: string) => {
       userId: userId
     })
   }
+}
+
+const handleToggleLock = () => {
+  if (!socket.value || !activeRoom.value || !currentUser.value.isHost) return
+  socket.value.emit('toggle-room-lock', {
+    roomId: activeRoom.value.id,
+    userId: currentUser.value.id
+  })
 }
 
 const handleLogout = () => {
@@ -612,14 +649,20 @@ watch(isSearching, (val) => {
                 <Users class="w-6 h-6" />
               </div>
             </div>
-            <h3 class="text-lg font-bold text-gray-800">{{ room.name }}</h3>
+            <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+              {{ room.name }}
+              <Lock v-if="room.isLocked" class="w-4 h-4 text-red-500" />
+            </h3>
           </div>
           <div class="flex items-center justify-between mt-4">
             <div class="flex -space-x-2">
               <div v-for="i in 3" :key="i" class="w-6 h-6 rounded-full border-2 border-white bg-gray-200"></div>
               <div class="w-6 h-6 rounded-full border-2 border-white bg-gray-100 flex items-center justify-center text-[8px] font-bold text-gray-400">+12</div>
             </div>
-            <span class="text-xs font-bold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">입장하기 →</span>
+            <span v-if="room.isLocked" class="text-xs font-bold text-red-500 flex items-center gap-1">
+              <Lock class="w-3.5 h-3.5" /> 잠김
+            </span>
+            <span v-else class="text-xs font-bold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">입장하기 →</span>
           </div>
         </div>
 
@@ -688,6 +731,22 @@ watch(isSearching, (val) => {
           <div>
             <h2 class="text-lg font-black text-gray-900 flex items-center gap-2">
               {{ activeRoom?.name }}
+              
+              <!-- Host일 때: 토글 버튼으로 작동 -->
+              <button 
+                v-if="currentUser.isHost" 
+                @click="handleToggleLock"
+                class="p-1 hover:bg-gray-100 rounded-lg text-gray-500 hover:text-gray-700 transition-colors flex items-center justify-center"
+                :title="activeRoom?.isLocked ? '방 잠금 해제' : '방 잠금'"
+              >
+                <Lock v-if="activeRoom?.isLocked" class="w-4 h-4 text-red-500" />
+                <Unlock v-else class="w-4 h-4 text-gray-400" />
+              </button>
+              
+              <!-- Host가 아닐 때: 일반 자물쇠 아이콘 표시 -->
+              <span v-else-if="activeRoom?.isLocked" title="잠긴 방" class="text-red-500">
+                <Lock class="w-4 h-4" />
+              </span>
             </h2>
             <div class="flex items-center gap-1.5">
               <div class="w-1.5 h-1.5 rounded-full bg-green-500"></div>
