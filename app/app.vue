@@ -42,6 +42,7 @@ const activeRoom = ref<Room | null>(null);
 const onlineUsers = ref<User[]>([]);
 // 메시지는 이제 초기 로드 시 빈 배열로 시작합니다.
 const messages = ref<Message[]>([]);
+const lastUpdatedTime = ref<string | null>(null);
 // -- Methods --
 const fetchRooms = async () => {
   try {
@@ -350,6 +351,14 @@ const handleDeleteMessage = (messageId: string) => {
 
 const handleRefresh = async () => {
   await fetchRooms()
+  const now = new Date()
+  const yyyy = now.getFullYear()
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const dd = String(now.getDate()).padStart(2, '0')
+  const hh = String(now.getHours()).padStart(2, '0')
+  const min = String(now.getMinutes()).padStart(2, '0')
+  const ss = String(now.getSeconds()).padStart(2, '0')
+  lastUpdatedTime.value = `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`
 }
 
 const handleKickUser = (userId: string) => {
@@ -667,9 +676,14 @@ watch(isSearching, (val) => {
         </div>
 
         <!-- Refresh Card -->
-        <button @click="handleRefresh" class="bg-white/50 border-2 border-dashed border-gray-200 rounded-[2rem] flex flex-col items-center justify-center gap-3 p-6 text-gray-400 hover:text-blue-500 hover:border-blue-200 hover:bg-blue-50/30 transition-all">
+        <button @click="handleRefresh" class="bg-white/50 border-2 border-dashed border-gray-200 rounded-[2rem] flex flex-col items-center justify-center gap-2 p-6 text-gray-400 hover:text-blue-500 hover:border-blue-200 hover:bg-blue-50/30 transition-all">
           <RefreshCw class="w-8 h-8" />
-          <span class="font-bold text-sm">목록 새로고침</span>
+          <div class="flex flex-col items-center gap-1">
+            <span class="font-bold text-sm">목록 새로고침</span>
+            <span v-if="lastUpdatedTime" class="text-xs text-gray-400 font-medium">
+              {{ lastUpdatedTime }}
+            </span>
+          </div>
         </button>
         <div class="text-center mt-4 flex items-center gap-2">
             <svg class="w-3 h-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2l2-2m" /></svg>
