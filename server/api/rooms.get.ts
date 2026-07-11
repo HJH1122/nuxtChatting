@@ -5,6 +5,14 @@ export default defineEventHandler(async (event) => {
     orderBy: {
       createdAt: 'desc',
     },
+    include: {
+      creator: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
   })
   return rooms
 })

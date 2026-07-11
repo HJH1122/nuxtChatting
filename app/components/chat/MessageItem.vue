@@ -149,11 +149,15 @@ const handleCopyCode = (code: string, index: number) => {
 
 <template>
   <div 
-    class="group flex flex-col mb-4 max-w-[85%]"
-    :class="isOwn ? 'ml-auto items-end' : 'mr-auto items-start'"
+    class="group flex flex-col mb-4"
+    :class="[
+      message.type === 'system' 
+        ? 'mx-auto items-center w-full max-w-full' 
+        : (isOwn ? 'ml-auto items-end max-w-[85%]' : 'mr-auto items-start max-w-[85%]')
+    ]"
   >
     <!-- Sender Name & Time -->
-    <div class="flex items-center gap-2 mb-1 px-1">
+    <div v-if="message.type !== 'system'" class="flex items-center gap-2 mb-1 px-1">
       <span v-if="!isOwn" class="text-xs font-bold text-gray-700">{{ formatSender(message.senderName, message.senderId) }}</span>
       <span class="text-[10px] text-gray-400">{{ formatTime(message.createdAt) }}</span>
       <span v-if="message.isEdited" class="text-[10px] text-gray-300 italic">(수정됨)</span>

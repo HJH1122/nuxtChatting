@@ -155,6 +155,15 @@ watch(socket, (newSocket) => {
       if (activeRoom.value && activeRoom.value.id === roomId) {
         activeRoom.value.creatorId = newHostId
         currentUser.value.isHost = (newHostId === currentUser.value.id)
+        
+        // Update activeRoom creator name if available in online users
+        const newHostUser = onlineUsers.value.find(u => u.id === newHostId)
+        if (newHostUser) {
+          activeRoom.value.creator = {
+            id: newHostUser.id,
+            name: newHostUser.name
+          }
+        }
       }
     })
 
@@ -268,6 +277,17 @@ const handleSendMessage = (content: string, attachment?: any, type: 'text' | 'im
 
   // 챗봇 명령어 처리 (로컬 도우미 메시지)
   if (trimmedContent === '/도움말') {
+    // 1. 사용자 입력 메시지를 로컬 화면에만 표시 (DB 저장 방지)
+    messages.value.push({
+      id: `msg-user-help-${Date.now()}`,
+      senderId: currentUser.value.id,
+      senderName: currentUser.value.name,
+      content: trimmedContent,
+      type: 'text',
+      createdAt: new Date().toISOString()
+    })
+
+    // 2. 봇 응답을 로컬 화면에만 표시
     messages.value.push({
       id: `msg-help-${Date.now()}`,
       senderId: 'bot',
@@ -280,12 +300,40 @@ const handleSendMessage = (content: string, attachment?: any, type: 'text' | 'im
       type: 'system',
       createdAt: new Date().toISOString()
     })
+
+    nextTick(() => {
+      if (messagesContainer.value) {
+        messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+      }
+    })
     return
   }
 
   if (trimmedContent === '/방장') {
+    // 1. 사용자 입력 메시지를 로컬 화면에만 표시 (DB 저장 방지)
+    messages.value.push({
+      id: `msg-user-host-${Date.now()}`,
+      senderId: currentUser.value.id,
+      senderName: currentUser.value.name,
+      content: trimmedContent,
+      type: 'text',
+      createdAt: new Date().toISOString()
+    })
+
+    // 2. 방장 이름 결정 (온라인 사용자 목록 -> activeRoom creator 정보 -> 현재 사용자 매칭 -> 기본값 순으로 탐색)
+    let hostName = ''
     const hostUser = onlineUsers.value.find(u => u.isHost)
-    const hostName = hostUser ? hostUser.name : '지정된 방장이 없거나 오프라인'
+    if (hostUser) {
+      hostName = hostUser.name
+    } else if (activeRoom.value.creator?.name) {
+      hostName = activeRoom.value.creator.name
+    } else if (activeRoom.value.creatorId === currentUser.value.id) {
+      hostName = currentUser.value.name
+    } else {
+      hostName = '지정된 방장이 없거나 오프라인'
+    }
+
+    // 3. 봇 응답을 로컬 화면에만 표시
     messages.value.push({
       id: `msg-host-${Date.now()}`,
       senderId: 'bot',
@@ -293,6 +341,12 @@ const handleSendMessage = (content: string, attachment?: any, type: 'text' | 'im
       content: `👑 현재 채팅방의 방장은 '${hostName}'입니다.`,
       type: 'system',
       createdAt: new Date().toISOString()
+    })
+
+    nextTick(() => {
+      if (messagesContainer.value) {
+        messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+      }
     })
     return
   }

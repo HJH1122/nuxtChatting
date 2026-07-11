@@ -24,6 +24,14 @@ export default defineEventHandler(async (event) => {
       name: name.trim(),
       creatorId: creatorId,
     },
+    include: {
+      creator: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
   })
 
   return room

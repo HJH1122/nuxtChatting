@@ -50,6 +50,10 @@ export interface Room {
   id: string;
   name: string;
   creatorId: string;
+  creator?: {
+    id: string;
+    name: string;
+  };
   isLocked: boolean;
   announcement?: string;
 }
