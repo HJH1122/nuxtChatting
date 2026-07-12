@@ -182,6 +182,14 @@ watch(socket, (newSocket) => {
       }
     })
 
+    newSocket.on('lobby-room-users-updated', ({ roomId, activeUsers }: { roomId: string, activeUsers: User[] }) => {
+      console.log('Lobby room users updated:', roomId, activeUsers)
+      const room = rooms.value.find(r => r.id === roomId)
+      if (room) {
+        room.activeUsers = activeUsers
+      }
+    })
+
     newSocket.on('join-room-failed', ({ roomId, reason }: { roomId: string, reason: string }) => {
       console.log('Join room failed:', roomId, reason)
       if (reason === 'locked') {
@@ -718,9 +726,59 @@ watch(isSearching, (val) => {
             </h3>
           </div>
           <div class="flex items-center justify-between mt-4">
-            <div class="flex -space-x-2">
-              <div v-for="i in 3" :key="i" class="w-6 h-6 rounded-full border-2 border-white bg-gray-200"></div>
-              <div class="w-6 h-6 rounded-full border-2 border-white bg-gray-100 flex items-center justify-center text-[8px] font-bold text-gray-400">+12</div>
+            <div class="relative group/users">
+              <div class="flex -space-x-2">
+                <!-- Render up to 3 active users' avatar initials -->
+                <div 
+                  v-for="user in (room.activeUsers || []).slice(0, 3)" 
+                  :key="user.id"
+                  class="w-6 h-6 rounded-full border-2 border-white bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[8px]"
+                >
+                  {{ user.name.charAt(0) }}
+                </div>
+                
+                <!-- If no active users, show 0 badge -->
+                <div 
+                  v-if="!(room.activeUsers && room.activeUsers.length)" 
+                  class="w-6 h-6 rounded-full border-2 border-white bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-400"
+                >
+                  0
+                </div>
+
+                <!-- Balloon/badge showing the remaining active users count -->
+                <div 
+                  v-else-if="room.activeUsers.length > 3" 
+                  class="w-6 h-6 rounded-full border-2 border-white bg-gray-100 flex items-center justify-center text-[8px] font-bold text-gray-400"
+                >
+                  +{{ room.activeUsers.length - 3 }}
+                </div>
+              </div>
+
+              <!-- Tooltip on Hover showing all active users -->
+              <div 
+                v-if="room.activeUsers && room.activeUsers.length > 0"
+                class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-gray-900/95 backdrop-blur-sm text-white text-xs rounded-xl p-3 shadow-xl pointer-events-none opacity-0 group-hover/users:opacity-100 transition-all duration-200 z-30 flex flex-col gap-1.5"
+              >
+                <!-- Title / Header -->
+                <div class="font-bold text-[10px] text-gray-400 border-b border-gray-700/50 pb-1 mb-1 uppercase tracking-wider flex items-center justify-between">
+                  <span>현재 접속자</span>
+                  <span class="text-blue-400 font-black">{{ room.activeUsers.length }}명</span>
+                </div>
+                <!-- Users list -->
+                <div class="max-h-24 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                  <div 
+                    v-for="user in room.activeUsers" 
+                    :key="user.id" 
+                    class="flex items-center gap-1.5"
+                  >
+                    <span class="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"></span>
+                    <span class="truncate font-medium">{{ user.name }}</span>
+                    <span v-if="user.id === room.creatorId" class="text-[8px] bg-yellow-500/20 text-yellow-400 px-1 py-0.2 rounded font-bold shrink-0">👑</span>
+                  </div>
+                </div>
+                <!-- Tooltip arrow -->
+                <div class="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900/95"></div>
+              </div>
             </div>
             <span v-if="room.isLocked" class="text-xs font-bold text-red-500 flex items-center gap-1">
               <Lock class="w-3.5 h-3.5" /> 잠김

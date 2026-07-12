@@ -56,4 +56,5 @@ export interface Room {
   };
   isLocked: boolean;
   announcement?: string;
+  activeUsers?: User[];
 }

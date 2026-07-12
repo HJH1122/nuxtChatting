@@ -1,4 +1,5 @@
 import prisma from '../utils/prisma'
+import { roomUsers } from '../utils/roomState'
 
 export default defineEventHandler(async (event) => {
   const rooms = await prisma.room.findMany({
@@ -14,5 +15,13 @@ export default defineEventHandler(async (event) => {
       },
     },
   })
-  return rooms
+  
+  return rooms.map((room) => {
+    const usersMap = roomUsers.get(room.id)
+    const activeUsers = usersMap ? Array.from(usersMap.values()) : []
+    return {
+      ...room,
+      activeUsers
+    }
+  })
 })

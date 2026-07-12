@@ -1,11 +1,7 @@
 import { Server } from 'socket.io'
 import prisma from '../utils/prisma'
 
-// In-memory storage for active users in rooms
-// roomId -> Map of socket.id -> user info
-const roomUsers = new Map<string, Map<string, { id: string; name: string; isHost?: boolean }>>()
-// socket.id -> { roomId, user }
-const socketUserMap = new Map<string, { roomId: string; user: { id: string; name: string; isHost?: boolean } }>()
+import { roomUsers, socketUserMap } from '../utils/roomState'
 
 export default defineNitroPlugin((nitroApp) => {
     console.log('⚡️ Socket.io server plugin is initializing...')
@@ -53,8 +49,11 @@ export default defineNitroPlugin((nitroApp) => {
                                 oldRoomUsers.delete(socket.id)
                                 if (oldRoomUsers.size === 0) {
                                     roomUsers.delete(oldRoomId)
+                                    ioInstance.emit('lobby-room-users-updated', { roomId: oldRoomId, activeUsers: [] })
                                 } else {
-                                    ioInstance.to(oldRoomId).emit('online-users', Array.from(oldRoomUsers.values()))
+                                    const updatedUsers = Array.from(oldRoomUsers.values())
+                                    ioInstance.to(oldRoomId).emit('online-users', updatedUsers)
+                                    ioInstance.emit('lobby-room-users-updated', { roomId: oldRoomId, activeUsers: updatedUsers })
                                 }
                             }
                         }
@@ -68,8 +67,10 @@ export default defineNitroPlugin((nitroApp) => {
                         const usersInRoom = roomUsers.get(roomId)!
                         usersInRoom.set(socket.id, user)
 
+                        const updatedUsers = Array.from(usersInRoom.values())
                         // Broadcast the updated list of users to the room
-                        ioInstance.to(roomId).emit('online-users', Array.from(usersInRoom.values()))
+                        ioInstance.to(roomId).emit('online-users', updatedUsers)
+                        ioInstance.emit('lobby-room-users-updated', { roomId, activeUsers: updatedUsers })
                     }
                 } catch (e) {
                     console.error("Failed to join room:", e);
@@ -92,8 +93,11 @@ export default defineNitroPlugin((nitroApp) => {
                         usersInRoom.delete(socket.id)
                         if (usersInRoom.size === 0) {
                             roomUsers.delete(roomId)
+                            ioInstance.emit('lobby-room-users-updated', { roomId, activeUsers: [] })
                         } else {
-                            ioInstance.to(roomId).emit('online-users', Array.from(usersInRoom.values()))
+                            const updatedUsers = Array.from(usersInRoom.values())
+                            ioInstance.to(roomId).emit('online-users', updatedUsers)
+                            ioInstance.emit('lobby-room-users-updated', { roomId, activeUsers: updatedUsers })
                         }
                     }
                 } catch (e) {
@@ -405,7 +409,9 @@ export default defineNitroPlugin((nitroApp) => {
                     const usersInRoom = roomUsers.get(data.roomId);
                     if (usersInRoom) {
                         usersInRoom.delete(targetSocketId);
-                        ioInstance.to(data.roomId).emit('online-users', Array.from(usersInRoom.values()));
+                        const updatedUsers = Array.from(usersInRoom.values());
+                        ioInstance.to(data.roomId).emit('online-users', updatedUsers);
+                        ioInstance.emit('lobby-room-users-updated', { roomId: data.roomId, activeUsers: updatedUsers });
                     }
 
                     // 2. Broadcast system message: "[유저명] 님이 강퇴되었습니다."
@@ -468,7 +474,9 @@ export default defineNitroPlugin((nitroApp) => {
                                 if (newHostSession) newHostSession.user.isHost = true;
                             }
                         }
-                        ioInstance.to(data.roomId).emit('online-users', Array.from(usersInRoom.values()));
+                        const updatedUsers = Array.from(usersInRoom.values());
+                        ioInstance.to(data.roomId).emit('online-users', updatedUsers);
+                        ioInstance.emit('lobby-room-users-updated', { roomId: data.roomId, activeUsers: updatedUsers });
                     }
 
                     if (targetUser) {
@@ -569,8 +577,11 @@ export default defineNitroPlugin((nitroApp) => {
                         usersInRoom.delete(socket.id)
                         if (usersInRoom.size === 0) {
                             roomUsers.delete(roomId)
+                            ioInstance.emit('lobby-room-users-updated', { roomId, activeUsers: [] })
                         } else {
-                            ioInstance.to(roomId).emit('online-users', Array.from(usersInRoom.values()))
+                            const updatedUsers = Array.from(usersInRoom.values())
+                            ioInstance.to(roomId).emit('online-users', updatedUsers)
+                            ioInstance.emit('lobby-room-users-updated', { roomId, activeUsers: updatedUsers })
                         }
                     }
                     socketUserMap.delete(socket.id)
