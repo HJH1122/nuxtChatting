@@ -566,6 +566,65 @@ export default defineNitroPlugin((nitroApp) => {
                 }
             });
 
+            // --- 3.96 Announcement Handling ---
+            socket.on('update-announcement', async (data) => {
+                if (!data || !data.roomId) return;
+
+                const session = socketUserMap.get(socket.id);
+                if (!session || !session.user || !session.user.isHost) {
+                    console.error("Unauthorized announcement update attempt by socket:", socket.id);
+                    return;
+                }
+
+                try {
+                    const room = await prisma.room.findUnique({
+                        where: { id: data.roomId }
+                    });
+
+                    if (!room) {
+                        console.error("Room not found:", data.roomId);
+                        return;
+                    }
+
+                    if (room.creatorId !== session.user.id) {
+                        console.error("Unauthorized announcement update: User is not creator");
+                        return;
+                    }
+
+                    const announcementText = data.announcement && data.announcement.trim() !== '' 
+                        ? data.announcement.trim() 
+                        : null;
+
+                    const updatedRoom = await prisma.room.update({
+                        where: { id: data.roomId },
+                        data: { announcement: announcementText }
+                    });
+
+                    // 1. Notify clients in the room to update activeRoom.announcement
+                    ioInstance.to(data.roomId).emit('announcement-updated', {
+                        roomId: data.roomId,
+                        announcement: updatedRoom.announcement
+                    });
+
+                    // 2. Broadcast system message
+                    const systemMsg = {
+                        id: `system-announcement-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                        content: updatedRoom.announcement 
+                            ? `📢 공지가 변경되었습니다: "${updatedRoom.announcement}"` 
+                            : "📢 공지사항이 삭제되었습니다.",
+                        senderId: 'system',
+                        senderName: 'System',
+                        createdAt: new Date().toISOString(),
+                        type: 'system'
+                    };
+                    ioInstance.to(data.roomId).emit('message', systemMsg);
+
+                    console.log(`[Socket] Room ${data.roomId} announcement updated to: ${updatedRoom.announcement}`);
+                } catch (e) {
+                    console.error("Error updating announcement:", e);
+                }
+            });
+
             // --- 4. Disconnect Logic (Cleanup) ---
             socket.on('disconnect', () => {
                 console.log('User disconnected:', socket.id);

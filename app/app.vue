@@ -197,6 +197,13 @@ watch(socket, (newSocket) => {
         leaveRoom()
       }
     })
+
+    newSocket.on('announcement-updated', ({ roomId, announcement }: { roomId: string, announcement: string | null }) => {
+      console.log('Announcement updated:', roomId, announcement)
+      if (activeRoom.value && activeRoom.value.id === roomId) {
+        activeRoom.value.announcement = announcement || undefined
+      }
+    })
   }
 }, { immediate: true })
 
@@ -455,6 +462,24 @@ const handleToggleLock = () => {
     roomId: activeRoom.value.id,
     userId: currentUser.value.id
   })
+}
+
+const handleUpdateAnnouncement = (announcementText: string) => {
+  if (!socket.value || !activeRoom.value || !currentUser.value.isHost) return
+  socket.value.emit('update-announcement', {
+    roomId: activeRoom.value.id,
+    announcement: announcementText
+  })
+}
+
+const handleDeleteAnnouncement = () => {
+  if (!socket.value || !activeRoom.value || !currentUser.value.isHost) return
+  if (confirm('공지사항을 삭제하시겠습니까?')) {
+    socket.value.emit('update-announcement', {
+      roomId: activeRoom.value.id,
+      announcement: null
+    })
+  }
 }
 
 const handleLogout = () => {
@@ -941,6 +966,8 @@ watch(isSearching, (val) => {
           <AnnouncementBar 
             :announcement="activeRoom?.announcement" 
             :isHost="currentUser.isHost" 
+            @update="handleUpdateAnnouncement"
+            @delete="handleDeleteAnnouncement"
           />
 
           <!-- Messages -->
