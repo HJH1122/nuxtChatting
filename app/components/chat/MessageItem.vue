@@ -104,7 +104,7 @@ const parseMessageContent = (content: string): ContentPart[] => {
     parts.push({
       type: 'code',
       lang: match[1] || 'plaintext',
-      content: match[2]
+      content: match[2] || '',
     })
     
     lastIndex = regex.lastIndex
