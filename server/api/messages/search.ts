@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
     try {
         const queryMessages = await prisma.message.findMany({
             where: {
-                roomId: roomId,
+                roomId: String(roomId),
                 content: {
                     contains: q.trim(),
                     mode: 'insensitive'

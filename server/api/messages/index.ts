@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
         // Use Prisma to fetch messages with cursor-based pagination (Infinite Scroll)
         const queryMessages = await prisma.message.findMany({
             where: {
-                roomId: roomId,
+                roomId: String(roomId),
             },
             orderBy: {
                 createdAt: 'desc'
