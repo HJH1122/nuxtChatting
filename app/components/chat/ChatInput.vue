@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { Send, Plus, Smile, Image as ImageIcon, BarChart2, Hash, X, FileText } from 'lucide-vue-next'
 
 const message = ref('')
@@ -152,6 +152,34 @@ const submit = () => {
     showEmojiPicker.value = false
   }
 }
+
+const handleKeyDown = (e: KeyboardEvent) => {
+  if (e.isComposing) return
+  if (e.key === 'Enter') {
+    if (e.ctrlKey) {
+      e.preventDefault()
+      return
+    }
+    if (e.shiftKey) {
+      return
+    }
+    e.preventDefault()
+    submit()
+  }
+}
+
+const adjustHeight = () => {
+  const el = textareaRef.value
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = `${Math.min(el.scrollHeight, 128)}px`
+}
+
+watch(message, () => {
+  nextTick(() => {
+    adjustHeight()
+  })
+})
 
 const triggerFileInput = () => {
   if (isUploading.value) return
@@ -424,7 +452,7 @@ const insertCodeBlock = () => {
             ref="textareaRef"
             v-model="message"
             @input="handleInput"
-            @keydown.enter.prevent="submit"
+            @keydown="handleKeyDown"
             placeholder="메시지를 입력하세요... (명령어: /도움말)"
             class="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none min-h-[48px] max-h-32"
             rows="1"

@@ -22,7 +22,7 @@
             </span>
             <span>{{ formatTime(msg.createdAt) }}</span>
           </div>
-          <div v-html="formatContent(msg.content)"></div>
+          <div v-html="formatContent(msg.content)" class="whitespace-pre-wrap break-words text-sm"></div>
         </div>
       </div>
 
@@ -35,14 +35,14 @@
     <!-- Message Input Area -->
     <footer class="p-4 border-t bg-white shadow-[0_-2px_8px_rgba(0,0,0,0.1)] sticky bottom-0">
         <div class="flex gap-3">
-            <input
+            <textarea
+                ref="textareaRef"
                 v-model="messageContent"
-                @keyup.enter="sendMessageFromInput"
-                type="text"
-                placeholder="메시지를 입력하고 Enter 키를 누르세요..."
+                @keydown="handleKeyDown"
+                placeholder="메시지를 입력하세요... (Enter: 전송, Ctrl+Enter/Shift+Enter: 줄바꿈)"
                 :disabled="isLoading"
-                class="flex-grow p-3 border rounded-full focus:ring-blue-500 focus:border-blue-500 transition duration-150 disabled:bg-gray-100"
-            />
+                class="flex-grow p-3 border rounded-xl focus:ring-blue-500 focus:border-blue-500 transition duration-150 disabled:bg-gray-100 resize-none min-h-[48px] max-h-32 overflow-y-auto"
+            ></textarea>
             <button
                 @click="sendMessageFromInput"
                 :disabled="!messageContent.trim() || isLoading"
@@ -55,7 +55,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref, computed } from 'vue';
+import { onMounted, ref, computed, nextTick, watch } from 'vue';
 // 임포트: useSocket Composable을 사용합니다.
 import { useSocket } from '@/composables/useSocket';
 // 임포트: API 호출용 로직 (예시)
@@ -68,6 +68,20 @@ const props = defineProps({
 const { chatHistory, onlineUsers, isLoading, sendMessage, loadInitialHistory, currentRoomId } = useSocket(props.roomId);
 const messageContent = ref('');
 const localUserId = 'current-user-id'; // TODO: Auth Context에서 실제 사용자 ID를 가져와야 함
+const textareaRef = ref(null);
+
+const adjustHeight = () => {
+    const el = textareaRef.value;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 128)}px`;
+};
+
+watch(messageContent, () => {
+    nextTick(() => {
+        adjustHeight();
+    });
+});
 
 // --- Lifecycle Hooks ---
 
@@ -86,6 +100,21 @@ const sendMessageFromInput = async () => {
     await sendMessage(content);
 
     messageContent.value = ''; // 입력창 초기화
+};
+
+const handleKeyDown = (event) => {
+    if (event.isComposing) return;
+    if (event.key === 'Enter') {
+        if (event.ctrlKey) {
+            event.preventDefault();
+            return;
+        }
+        if (event.shiftKey) {
+            return;
+        }
+        event.preventDefault();
+        sendMessageFromInput();
+    }
 };
 
 
