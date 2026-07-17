@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
                     }
                 }
             },
-            take: limit > 0 ? Number(limit) : undefined,
+            take: Number(limit) > 0 ? Number(limit) : undefined,
             cursor: afterMessageId ? { id: String(afterMessageId) } : undefined,
             skip: afterMessageId ? 1 : undefined,
         });

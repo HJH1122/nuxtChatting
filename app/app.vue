@@ -540,7 +540,10 @@ const searchMessages = async () => {
     searchResults.value = data.messages
     if (data.messages.length > 0) {
       currentSearchIndex.value = data.messages.length - 1
-      await scrollToMessage(data.messages[currentSearchIndex.value].id)
+      const targetMessage = data.messages[currentSearchIndex.value]
+      if (targetMessage) {
+        await scrollToMessage(targetMessage.id)
+      }
     } else {
       currentSearchIndex.value = -1
     }
@@ -555,8 +558,9 @@ const scrollToMessage = async (messageId: string) => {
   
   while (!messages.value.some(m => m.id === messageId) && attempts < maxAttempts) {
     attempts++
-    if (messages.value.length === 0) break
-    const oldestMessageId = messages.value[0].id
+    const oldestMessage = messages.value[0]
+    if (!oldestMessage) break
+    const oldestMessageId = oldestMessage.id
     
     try {
       const data = await $fetch<{ messages: Message[], count: number, hasMore: boolean }>('/api/messages', {
@@ -595,7 +599,10 @@ const goToPrevSearchResult = () => {
   } else {
     currentSearchIndex.value = searchResults.value.length - 1
   }
-  scrollToMessage(searchResults.value[currentSearchIndex.value].id)
+  const targetMessage = searchResults.value[currentSearchIndex.value]
+  if (targetMessage) {
+    scrollToMessage(targetMessage.id)
+  }
 }
 
 const goToNextSearchResult = () => {
@@ -605,7 +612,10 @@ const goToNextSearchResult = () => {
   } else {
     currentSearchIndex.value = 0
   }
-  scrollToMessage(searchResults.value[currentSearchIndex.value].id)
+  const targetMessage = searchResults.value[currentSearchIndex.value]
+  if (targetMessage) {
+    scrollToMessage(targetMessage.id)
+  }
 }
 
 const onSearchInput = () => {
@@ -616,10 +626,11 @@ const onSearchInput = () => {
 }
 
 const loadOlderMessages = async () => {
-  if (isLoadingMore.value || !hasMoreMessages.value || !activeRoom.value || messages.value.length === 0) return
+  const oldestMessage = messages.value[0]
+  if (isLoadingMore.value || !hasMoreMessages.value || !activeRoom.value || !oldestMessage) return
   isLoadingMore.value = true
   
-  const oldestMessageId = messages.value[0].id
+  const oldestMessageId = oldestMessage.id
   
   try {
     const data = await $fetch<{ messages: Message[], count: number, hasMore: boolean }>('/api/messages', {
