@@ -1,7 +1,14 @@
 import { Server } from 'socket.io'
+import type { Server as HttpServer } from 'node:http'
 import prisma from '../utils/prisma'
 
 import { roomUsers, socketUserMap } from '../utils/roomState'
+
+declare module 'nitropack' {
+    interface NitroRuntimeHooks {
+        'listen': (server: HttpServer) => void
+    }
+}
 
 export default defineNitroPlugin((nitroApp) => {
     console.log('⚡️ Socket.io server plugin is initializing...')
