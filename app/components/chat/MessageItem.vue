@@ -56,6 +56,13 @@ const submitEdit = () => {
   isEditing.value = false
 }
 
+const handleEditKeyDown = (e: KeyboardEvent) => {
+  if (e.isComposing) return
+  if (e.shiftKey) return
+  e.preventDefault()
+  submitEdit()
+}
+
 const handleDelete = () => {
   showMenu.value = false
   if (confirm('정말 이 메시지를 삭제하시겠습니까?')) {
@@ -200,7 +207,7 @@ const handleCopyCode = (code: string, index: number) => {
               v-model="editContent" 
               class="w-full bg-white text-gray-900 border border-transparent rounded-xl p-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none resize-none font-sans"
               rows="2"
-              @keydown.enter.prevent="submitEdit"
+              @keydown.enter="handleEditKeyDown"
               @keydown.esc="cancelEdit"
             ></textarea>
             <div class="flex justify-end gap-1.5">
